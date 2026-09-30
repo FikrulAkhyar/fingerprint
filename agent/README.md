@@ -160,6 +160,16 @@ icon-nya tidak ada, double-click `FingerprintAgent.exe` di
   1:1 sesuai proses bisnis yang sudah dikonfirmasi di `design.md`.
 - Enrollment butuh **scan jari yang sama 3x** — ini persyaratan SDK
   (`DBMerge`), bukan bug.
+- **"Gagal menggabungkan hasil scan" / `DBMerge` kode `-22` (`ZKFP_ERR_MERGE`)**
+  — SDK butuh area yang cukup overlap antar 3 capture buat menemukan titik
+  referensi (minutiae) yang sama. **Variasi posisi antar scan itu wajar &
+  memang tujuannya** (makanya diminta 3x, bukan 1x) — bukan berarti jari
+  harus ditempel persis di titik yang sama. Penyebab paling umum justru:
+  jari yang dipakai berbeda-beda di tengah proses (mis. orang lain ikut
+  coba), atau salah satu capture kualitasnya jelek (kurang mantap/tertarik
+  saat scan, jari basah/kering/kotor). Bukan bug — user tinggal enroll ulang
+  pakai jari yang sama & tempelkan dengan mantap tiap kali. Kode error SDK
+  lain ada di `docs/ZKFinger Reader SDK C#_en_V2.pdf` §6.2.
 - Kalau device gagal diinisialisasi (alat belum dicolok, driver belum
   terpasang, atau masih dipakai aplikasi lain seperti Demo2 dari Tahap 1),
   akan muncul **popup error** saat Agent dijalankan (bukan tersembunyi) —

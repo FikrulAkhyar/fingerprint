@@ -83,7 +83,7 @@ btnEnroll.addEventListener('click', async () => {
     const startData = await startRes.json();
     if (!startRes.ok) throw new Error(startData.error || 'Gagal memulai enroll');
 
-    const template = await pollEnrollStatus(startData.session_id);
+    const { template, mergeFallback } = await pollEnrollStatus(startData.session_id);
 
     ScanModal.setStatus('Menyimpan ke database...');
     const saveRes = await fetch('{{ route('fingerprints.store') }}', {
@@ -96,7 +96,10 @@ btnEnroll.addEventListener('click', async () => {
     });
     if (!saveRes.ok) throw new Error('Gagal menyimpan ke database');
 
-    ScanModal.success('Enroll berhasil untuk "' + nama + '".', () => {
+    const message = mergeFallback
+      ? 'Enroll berhasil untuk "' + nama + '" (pakai 1 scan — 3 hasil scan tidak bisa digabung otomatis, coba tempel jari lebih mantap kalau mau ulang).'
+      : 'Enroll berhasil untuk "' + nama + '".';
+    ScanModal.success(message, () => {
       namaInput.value = '';
       location.reload();
     });
@@ -126,7 +129,7 @@ function pollEnrollStatus(sessionId) {
         clearInterval(interval);
         if (data.success) {
           ScanModal.setStep(3);
-          resolve(data.template);
+          resolve({ template: data.template, mergeFallback: !!data.merge_fallback });
         } else {
           reject(new Error(data.error || 'Enroll gagal.'));
         }

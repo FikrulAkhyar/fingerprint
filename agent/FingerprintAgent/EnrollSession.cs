@@ -16,6 +16,7 @@ namespace FingerprintAgent
         public bool Success { get; set; }
         public string ErrorMessage { get; set; }
         public string TemplateBase64 { get; set; }
+        public bool UsedMergeFallback { get; set; }
     }
 
     public class EnrollSessionManager
@@ -63,12 +64,29 @@ namespace FingerprintAgent
                     session.Step = i + 1;
                 }
 
-                byte[] merged = _zk.MergeTemplates(scans[0], scans[1], scans[2]);
+                byte[] finalTemplate;
+                try
+                {
+                    finalTemplate = _zk.MergeTemplates(scans[0], scans[1], scans[2]);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    // SDK menolak menggabungkan 3 capture jadi satu (lihat
+                    // catatan di ZkFingerService.MergeTemplates). Daripada
+                    // bikin user harus ulang dari awal, fallback: pakai
+                    // capture terakhir langsung sebagai template tunggal.
+                    // Trade-off: sedikit lebih rentan false-reject saat
+                    // verifikasi dibanding hasil merge SDK, tapi enrollment
+                    // tetap bisa selesai.
+                    Logger.Error("Merge gagal, fallback ke single capture: " + ex.Message);
+                    finalTemplate = scans[RequiredScans - 1];
+                    session.UsedMergeFallback = true;
+                }
 
                 // Template dikembalikan ke browser saja — browser yang POST
                 // ke Laravel (lihat resources/views/fingerprints/enroll.blade.php
                 // di web/). Agent tidak menyimpan apa pun secara permanen.
-                session.TemplateBase64 = Convert.ToBase64String(merged);
+                session.TemplateBase64 = Convert.ToBase64String(finalTemplate);
                 session.Success = true;
                 session.Done = true;
             }

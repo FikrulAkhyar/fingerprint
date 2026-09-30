@@ -94,7 +94,16 @@ namespace FingerprintAgent
                 int mergedLen = 2048;
                 int ret = zkfp2.DBMerge(_dbHandle, t1, t2, t3, merged, ref mergedLen);
                 if (ret != zkfp.ZKFP_ERR_OK)
-                    throw new InvalidOperationException("DBMerge gagal, kode=" + ret);
+                {
+                    Logger.Error("DBMerge gagal, kode=" + ret);
+
+                    string message = ret == -22
+                        ? "Gagal menggabungkan hasil scan — pastikan pakai jari yang sama di ketiga " +
+                          "percobaan (jangan ganti jari) dan tempelkan dengan mantap tiap kali, " +
+                          "lalu coba enroll ulang."
+                        : "Gagal menggabungkan hasil scan (kode=" + ret + "). Coba enroll ulang.";
+                    throw new InvalidOperationException(message);
+                }
 
                 byte[] result = new byte[mergedLen];
                 Array.Copy(merged, result, mergedLen);

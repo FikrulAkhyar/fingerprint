@@ -98,7 +98,7 @@ namespace FingerprintAgent
             }
 
             WriteJson(res, 200, session.Success
-                ? MiniJson.WriteObject(("done", true), ("success", true), ("template", session.TemplateBase64))
+                ? MiniJson.WriteObject(("done", true), ("success", true), ("template", session.TemplateBase64), ("merge_fallback", session.UsedMergeFallback))
                 : MiniJson.WriteObject(("done", true), ("success", false), ("error", session.ErrorMessage)));
         }
 
