@@ -16,3 +16,6 @@ Route::get('/api/fingerprints', [FingerprintController::class, 'list'])->name('f
 // Dipanggil Agent (server-to-server) saat /verify (1:1, by nama) butuh
 // template tersimpan.
 Route::get('/api/fingerprints/{nama}', [FingerprintController::class, 'show'])->name('fingerprints.show');
+
+// Dipanggil browser (JS) untuk hapus data dari tabel "Daftar Terdaftar".
+Route::delete('/api/fingerprints/{nama}', [FingerprintController::class, 'destroy'])->name('fingerprints.destroy');

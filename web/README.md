@@ -56,6 +56,26 @@ Kalau mau ganti host/kredensial (mis. di laptop lain), tinggal ubah `DB_*`
 di `.env` lalu `php artisan migrate` ulang — tidak ada kode lain yang perlu
 diubah karena lewat Eloquent.
 
+## Alamat Fingerprint Agent (`AGENT_URL`)
+
+JS di halaman ini manggil Agent lewat `AGENT_URL`, diatur dari `.env`
+(`config/services.php`), bukan hardcode di blade:
+
+```
+AGENT_URL=http://127.0.0.1:9001
+```
+
+- **Kasus normal** (browser & Agent di laptop yang sama): biarkan default
+  `127.0.0.1`.
+- **Browser dibuka dari laptop lain**, Agent-nya di laptop Windows terpisah:
+  ganti jadi IP laptop Windows itu (mis. `http://192.168.10.50:9001`) — lihat
+  `../agent/README.md` bagian "Mengakses Agent dari laptop lain" untuk setup
+  tambahan yang dibutuhkan di sisi Windows (izin bind + firewall).
+
+Setelah ubah `.env`, jalankan `php artisan config:clear` kalau config sempat
+di-cache (`config:cache`); untuk `php artisan serve` biasa di local biasanya
+tidak perlu.
+
 ## Catatan teknis: JSON_UNESCAPED_SLASHES
 
 Semua response JSON yang dibaca Agent (`show()`, `list()` di

@@ -35,4 +35,11 @@ return [
         ],
     ],
 
+    // URL Fingerprint Agent (localhost kalau browser & Agent di laptop yang
+    // sama — kasus normal; IP laptop Agent kalau browser dibuka dari mesin
+    // lain, lihat ../agent/README.md bagian "Mengakses Agent dari laptop lain").
+    'agent' => [
+        'url' => env('AGENT_URL', 'http://127.0.0.1:9001'),
+    ],
+
 ];

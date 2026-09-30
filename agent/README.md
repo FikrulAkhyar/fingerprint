@@ -81,9 +81,51 @@ ini) di **laptop B** (mis. `192.168.10.62`):
    `http://192.168.10.62:8000` — bukan `127.0.0.1`, supaya bisa muat halaman
    dari laptop B.
 
-Yang **tidak berubah**: `AGENT_URL` di halaman web tetap `127.0.0.1:9001`,
-karena browser & Agent memang harus di laptop yang sama (Agent cuma bisa
-diakses dari mesin tempat dia jalan, tidak lewat jaringan).
+Yang **tidak berubah** untuk skenario di atas: browser tetap harus dibuka di
+laptop yang sama dengan Agent (Agent cuma bisa diakses dari mesin tempat dia
+jalan, tidak lewat jaringan) — kecuali Anda mengaktifkan akses jarak jauh ke
+Agent seperti di bawah ini.
+
+## Mengakses Agent dari laptop lain (mis. testing/debug dari Mac)
+
+Secara default Agent bind ke `127.0.0.1` (localhost) — sengaja, ini yang
+paling aman (lihat `design.md` §7: Agent tidak boleh diakses dari luar
+localhost, supaya halaman web sembarangan tidak bisa diam-diam memanggilnya).
+Tapi untuk kebutuhan testing/debug langsung dari laptop lain (mis. curl dari
+Mac ke Agent yang jalan di Windows), ini bisa diaktifkan:
+
+1. **Windows (laptop tempat Agent jalan)** — sekali saja, buka Command
+   Prompt / PowerShell **as Administrator**, jalankan:
+   ```
+   netsh http add urlacl url=http://+:9001/ user=Everyone
+   netsh advfirewall firewall add rule name="FingerprintAgent" dir=in action=allow protocol=TCP localport=9001
+   ```
+   Baris pertama mengizinkan Agent bind ke semua network interface tanpa
+   perlu run-as-admin setiap kali jalan; baris kedua membuka portnya di
+   Windows Firewall.
+2. Edit `agent/.env`, ubah:
+   ```
+   AGENT_BIND_HOST=+
+   ```
+3. Jalankan ulang `FingerprintAgent.exe` (tidak perlu build ulang — ini cuma
+   file `.env`). Cek `agent.log`, harus muncul `Agent bind host: +`.
+4. Cari IP laptop Windows-nya (`ipconfig`, lihat IPv4 Address di adapter
+   Wi-Fi/Ethernet yang aktif), misal `192.168.10.50`.
+5. Dari laptop lain (Mac dkk.), akses lewat IP itu, bukan `127.0.0.1`:
+   ```
+   curl http://192.168.10.50:9001/enroll/start -X POST -H "Content-Type: application/json" -d "{\"nama\":\"test\"}"
+   ```
+   Kalau mau diakses lewat halaman web (bukan curl), edit `AGENT_URL` di
+   `web/.env` jadi `http://192.168.10.50:9001` (lihat `web/README.md`) —
+   tidak perlu ubah kode/blade manapun, sama seperti `BACKEND_URL` di sisi
+   Agent.
+
+**Catatan keamanan**: dengan `AGENT_BIND_HOST=+`, siapa pun di jaringan yang
+sama bisa memanggil Agent (termasuk memicu capture sidik jari). Ini oke untuk
+jaringan testing pribadi/kantor yang tepercaya, tapi jangan dipakai dengan
+setting ini di jaringan publik atau di laptop produksi — kembalikan ke
+`AGENT_BIND_HOST=127.0.0.1` (atau hapus baris itu dari `.env`) begitu selesai
+testing.
 
 ## Pemakaian sehari-hari (untuk user non-IT)
 

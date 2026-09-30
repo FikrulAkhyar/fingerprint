@@ -24,16 +24,19 @@
     <h2>Daftar Terdaftar</h2>
     <table>
       <thead>
-        <tr><th>Nama</th><th>Terdaftar pada</th></tr>
+        <tr><th>Nama</th><th>Terdaftar pada</th><th></th></tr>
       </thead>
       <tbody id="fingerprintsBody">
         @forelse ($fingerprints as $fingerprint)
           <tr>
             <td>{{ $fingerprint->nama }}</td>
             <td>{{ $fingerprint->created_at->format('d M Y H:i') }}</td>
+            <td style="text-align: right;">
+              <button class="btn-secondary btn-sm btn-delete" data-nama="{{ $fingerprint->nama }}">Hapus</button>
+            </td>
           </tr>
         @empty
-          <tr class="empty-row"><td colspan="2">Belum ada yang terdaftar.</td></tr>
+          <tr class="empty-row"><td colspan="3">Belum ada yang terdaftar.</td></tr>
         @endforelse
       </tbody>
     </table>
@@ -157,6 +160,27 @@ btnIdentify.addEventListener('click', async () => {
   } finally {
     btnIdentify.disabled = false;
   }
+});
+
+// --- Hapus data terdaftar ---
+document.querySelectorAll('.btn-delete').forEach((btn) => {
+  btn.addEventListener('click', async () => {
+    const nama = btn.dataset.nama;
+    if (!confirm('Yakin mau hapus data sidik jari "' + nama + '"?')) return;
+
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/fingerprints/' + encodeURIComponent(nama), {
+        method: 'DELETE',
+        headers: { 'X-CSRF-TOKEN': csrfToken },
+      });
+      if (!res.ok) throw new Error('Gagal menghapus data');
+      location.reload();
+    } catch (err) {
+      alert(err.message);
+      btn.disabled = false;
+    }
+  });
 });
 </script>
 @endsection

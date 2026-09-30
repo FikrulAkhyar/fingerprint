@@ -57,4 +57,16 @@ class FingerprintController extends Controller
 
         return response()->json($fingerprints, 200, [], JSON_UNESCAPED_SLASHES);
     }
+
+    // Dipanggil browser untuk hapus data terdaftar dari tabel "Daftar Terdaftar".
+    public function destroy(string $nama)
+    {
+        $deleted = Fingerprint::where('nama', $nama)->delete();
+
+        if (! $deleted) {
+            return response()->json(['error' => 'Data tidak ditemukan'], 404);
+        }
+
+        return response()->json(['success' => true]);
+    }
 }

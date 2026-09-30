@@ -9,13 +9,27 @@ namespace FingerprintAgent
     {
         private const string DefaultBackendBaseUrl = "http://127.0.0.1:8000";
 
+        // "127.0.0.1" = cuma bisa diakses dari laptop ini sendiri (default,
+        // paling aman). Ganti ke "+" di .env (AGENT_BIND_HOST=+) supaya bisa
+        // diakses dari laptop lain di jaringan yang sama — lihat README untuk
+        // langkah setup tambahan yang dibutuhkan Windows (izin bind & firewall).
+        private const string DefaultAgentBindHost = "127.0.0.1";
+
         [STAThread]
         static void Main()
         {
             Logger.Info("Agent starting...");
 
-            string backendBaseUrl = LoadBackendBaseUrl();
+            var env = EnvFile.Load(FindOrCreateEnvFile());
+            string backendBaseUrl = env.TryGetValue("BACKEND_URL", out var url) && !string.IsNullOrEmpty(url)
+                ? url
+                : DefaultBackendBaseUrl;
+            string bindHost = env.TryGetValue("AGENT_BIND_HOST", out var host) && !string.IsNullOrEmpty(host)
+                ? host
+                : DefaultAgentBindHost;
+
             Logger.Info("Backend base URL: " + backendBaseUrl);
+            Logger.Info("Agent bind host: " + bindHost);
 
             var zk = new ZkFingerService();
             try
@@ -38,7 +52,8 @@ namespace FingerprintAgent
 
             var store = new BackendTemplateStore(backendBaseUrl);
             var enrollManager = new EnrollSessionManager(zk);
-            var api = new HttpApi("http://127.0.0.1:9001/", zk, enrollManager, store);
+            string prefix = "http://" + bindHost + ":9001/";
+            var api = new HttpApi(prefix, zk, enrollManager, store);
 
             var httpThread = new Thread(() =>
             {
@@ -49,26 +64,24 @@ namespace FingerprintAgent
                 catch (Exception ex)
                 {
                     Logger.Error("HTTP API berhenti: " + ex.Message);
+                    MessageBox.Show(
+                        "Agent gagal membuka port 9001:\n\n" + ex.Message +
+                        "\n\nKalau AGENT_BIND_HOST di .env di-set ke \"+\", pastikan sudah jalankan " +
+                        "'netsh http add urlacl' (lihat README) atau jalankan Agent sebagai Administrator.",
+                        "Fingerprint Agent - Error",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
                 }
             });
             httpThread.IsBackground = true;
             httpThread.Start();
 
-            Logger.Info("Agent siap di http://127.0.0.1:9001/");
+            Logger.Info("Agent siap di " + prefix);
 
             using (var trayContext = new TrayApplicationContext(zk))
             {
                 Application.Run(trayContext);
             }
-        }
-
-        private static string LoadBackendBaseUrl()
-        {
-            string path = FindOrCreateEnvFile();
-            var env = EnvFile.Load(path);
-            return env.TryGetValue("BACKEND_URL", out var url) && !string.IsNullOrEmpty(url)
-                ? url
-                : DefaultBackendBaseUrl;
         }
 
         // .env dicari mulai dari folder .exe (bin\<Config>\net48\), naik ke
@@ -93,7 +106,10 @@ namespace FingerprintAgent
                 ?? AppDomain.CurrentDomain.BaseDirectory;
 
             string newPath = Path.Combine(agentDir, ".env");
-            File.WriteAllText(newPath, "BACKEND_URL=" + DefaultBackendBaseUrl);
+            File.WriteAllText(newPath,
+                "BACKEND_URL=" + DefaultBackendBaseUrl + Environment.NewLine +
+                "# AGENT_BIND_HOST=+ untuk bisa diakses dari laptop lain (lihat README)" + Environment.NewLine +
+                "AGENT_BIND_HOST=" + DefaultAgentBindHost + Environment.NewLine);
             return newPath;
         }
     }

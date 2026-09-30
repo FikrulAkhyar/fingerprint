@@ -55,6 +55,7 @@
   button:disabled { background: #94a3b8; cursor: not-allowed; }
   .btn-secondary { background: #eef2f7; color: var(--text); }
   .btn-secondary:hover { background: #e2e8f0; }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
   .agent-status { font-size: 12px; color: var(--muted); margin-bottom: 20px; }
   .agent-status.ok { color: var(--success); }
   .agent-status.down { color: var(--error); }
@@ -188,7 +189,7 @@
 </div>
 
 <script>
-  const AGENT_URL = 'http://127.0.0.1:9001';
+  const AGENT_URL = '{{ config('services.agent.url') }}';
 
   const ScanModal = (() => {
     const overlay = document.getElementById('scanModalOverlay');
