@@ -18,13 +18,23 @@ juga sedang berjalan di laptop Windows yang sama (lihat `../agent/README.md`).
 
 ## Halaman
 
-- `/` — daftar semua yang sudah terdaftar (nama + waktu daftar), dari tabel `fingerprints`.
-- `/enroll` — form daftar sidik jari. Browser memanggil Agent untuk capture (3x scan),
-  lalu POST hasil template ke `POST /api/fingerprints` (route di sini) untuk disimpan.
-- `/verify` — form verifikasi. Browser cuma memanggil Agent; Agent sendiri yang
-  mengambil template tersimpan lewat `GET /api/fingerprints/{nama}` (server-to-server,
-  lihat `../agent/FingerprintAgent/TemplateStore.cs`) dan melakukan pencocokan —
-  template tidak pernah dikirim ke browser saat verifikasi.
+Cuma **satu halaman** (`/`), berisi tiga bagian:
+
+- **Daftar Sidik Jari** (enroll) — isi nama, browser memanggil Agent untuk
+  capture (3x scan), lalu POST hasil template ke `POST /api/fingerprints`
+  (route di sini) untuk disimpan.
+- **Cek Sidik Jari** — tanpa isi nama sama sekali. Browser cuma memanggil
+  Agent (`POST /identify`); Agent sendiri yang ambil **semua** template lewat
+  `GET /api/fingerprints` (server-to-server, lihat
+  `../agent/FingerprintAgent/TemplateStore.cs`) dan mencocokkan satu-satu
+  (1:N) untuk cari siapa pemilik jari itu — template tidak pernah dikirim ke
+  browser.
+- **Daftar Terdaftar** — tabel nama + waktu daftar, dari tabel `fingerprints`.
+
+Endpoint `GET /api/fingerprints/{nama}` (1:1, by nama) tetap ada untuk
+kebutuhan Agent `/verify` di masa depan (sesuai kontrak §5.1/§5.2
+`design.md`), walau UI di halaman ini sekarang pakai jalur 1:N
+(`/identify`) demi kemudahan testing.
 
 ## Database
 
@@ -45,6 +55,17 @@ id, nama (unique), template (text, base64), created_at, updated_at
 Kalau mau ganti host/kredensial (mis. di laptop lain), tinggal ubah `DB_*`
 di `.env` lalu `php artisan migrate` ulang — tidak ada kode lain yang perlu
 diubah karena lewat Eloquent.
+
+## Catatan teknis: JSON_UNESCAPED_SLASHES
+
+Semua response JSON yang dibaca Agent (`show()`, `list()` di
+`FingerprintController`) wajib pakai flag `JSON_UNESCAPED_SLASHES`. Tanpa
+ini, `json_encode` bawaan PHP meng-escape karakter `/` (yang sering muncul
+di base64) jadi `\/` — parser JSON minimal di Agent (`MiniJson.cs`, sengaja
+tanpa library eksternal) tidak menghandle escape itu, sehingga template yang
+diterima Agent jadi rusak/invalid ("input is not a valid base-64 string").
+Kalau nanti nambah endpoint baru yang responsnya dibaca Agent, jangan lupa
+flag ini juga.
 
 ## Kenapa Laravel, bukan PHP Slim seperti CBS asli?
 

@@ -1,9 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 
 namespace FingerprintAgent
 {
-    // Sumber template tersimpan, dipakai saat /verify.
+    // Sumber template tersimpan, dipakai saat /verify (1:1, by nama) dan
+    // /identify (1:N, cari ke semua data — testing convenience, di luar
+    // kontrak produksi §5.1/§5.2 design.md yang aslinya cuma 1:1).
     //
     // Enrollment (menyimpan template baru) TIDAK lewat sini lagi — browser
     // yang langsung POST ke backend setelah Agent selesai capture+merge
@@ -19,6 +22,7 @@ namespace FingerprintAgent
     public interface ITemplateStore
     {
         byte[] Get(string nama);
+        List<(string Nama, byte[] Template)> List();
     }
 
     public class BackendTemplateStore : ITemplateStore
@@ -52,6 +56,33 @@ namespace FingerprintAgent
             catch (WebException ex) when (ex.Response is HttpWebResponse resp && resp.StatusCode == HttpStatusCode.NotFound)
             {
                 return null; // belum terdaftar
+            }
+        }
+
+        public List<(string Nama, byte[] Template)> List()
+        {
+            string url = _baseUrl + "/api/fingerprints";
+
+            var request = (HttpWebRequest)WebRequest.Create(url);
+            request.Method = "GET";
+            request.Accept = "application/json";
+            request.Timeout = 5000;
+
+            using (var response = (HttpWebResponse)request.GetResponse())
+            using (var reader = new System.IO.StreamReader(response.GetResponseStream()))
+            {
+                string body = reader.ReadToEnd();
+                var result = new List<(string, byte[])>();
+
+                foreach (string obj in MiniJson.ExtractObjects(body))
+                {
+                    string nama = MiniJson.ExtractString(obj, "nama");
+                    string base64 = MiniJson.ExtractString(obj, "template");
+                    if (nama != null && base64 != null)
+                        result.Add((nama, Convert.FromBase64String(base64)));
+                }
+
+                return result;
             }
         }
     }

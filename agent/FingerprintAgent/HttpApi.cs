@@ -57,6 +57,8 @@ namespace FingerprintAgent
                     HandleEnrollStatus(req, res);
                 else if (req.HttpMethod == "POST" && req.Url.AbsolutePath == "/verify")
                     HandleVerify(req, res);
+                else if (req.HttpMethod == "POST" && req.Url.AbsolutePath == "/identify")
+                    HandleIdentify(res);
                 else
                     WriteJson(res, 404, MiniJson.WriteObject(("error", "Not found")));
             }
@@ -125,6 +127,43 @@ namespace FingerprintAgent
 
             int score = _zk.Match(captured, stored);
             WriteJson(res, 200, MiniJson.WriteObject(("match", score > 0), ("score", score)));
+        }
+
+        // 1:N — cari ke semua template tersimpan, tanpa perlu tahu nama
+        // duluan. Testing convenience, di luar kontrak produksi §5.1
+        // design.md (yang aslinya cuma 1:1, karena no. rekening/nama selalu
+        // sudah diketahui dari alur teller sebenarnya).
+        private void HandleIdentify(HttpListenerResponse res)
+        {
+            var candidates = _store.List();
+            if (candidates.Count == 0)
+            {
+                WriteJson(res, 404, MiniJson.WriteObject(("error", "Belum ada sidik jari yang terdaftar")));
+                return;
+            }
+
+            byte[] captured = _zk.CaptureOnce();
+            if (captured == null)
+            {
+                WriteJson(res, 408, MiniJson.WriteObject(("error", "Waktu habis, tidak ada jari terdeteksi")));
+                return;
+            }
+
+            string bestNama = null;
+            int bestScore = 0;
+            foreach (var (nama, template) in candidates)
+            {
+                int score = _zk.Match(captured, template);
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestNama = nama;
+                }
+            }
+
+            WriteJson(res, 200, bestNama != null
+                ? MiniJson.WriteObject(("match", true), ("nama", bestNama), ("score", bestScore))
+                : MiniJson.WriteObject(("match", false), ("score", 0)));
         }
 
         private static string ReadBody(HttpListenerRequest req)

@@ -107,8 +107,15 @@ icon-nya tidak ada, double-click `FingerprintAgent.exe` di
   lokal — ini mendekati arsitektur produksi asli di `design.md` §5.2 (backend
   testing ini berperan seperti CBS, walau CBS asli nanti pakai PHP Slim,
   bukan Laravel). **Backend-nya harus sudah jalan** (`php artisan serve` untuk
-  saat ini) sebelum Agent dites, kalau tidak `/verify` akan gagal karena
-  tidak bisa ambil template.
+  saat ini) sebelum Agent dites, kalau tidak `/verify`/`/identify` akan
+  gagal karena tidak bisa ambil template.
+- **`POST /identify`** — endpoint tambahan (testing convenience, di luar
+  kontrak resmi §5.1 `design.md`) buat cek sidik jari **tanpa isi nama**:
+  Agent ambil semua template dari backend (`GET /api/fingerprints`), lalu
+  `Match()` satu-satu, kembalikan yang skornya tertinggi. Ini yang dipakai
+  halaman web sekarang untuk "Cek Sidik Jari". `POST /verify` (by nama, 1:1)
+  tetap ada di kode untuk kebutuhan nanti kalau CBS asli mau pakai pola
+  1:1 sesuai proses bisnis yang sudah dikonfirmasi di `design.md`.
 - Enrollment butuh **scan jari yang sama 3x** — ini persyaratan SDK
   (`DBMerge`), bukan bug.
 - Kalau device gagal diinisialisasi (alat belum dicolok, driver belum
@@ -147,7 +154,7 @@ agent/
     ├── ZkFingerService.cs         (wrapper SDK: Init/Capture/Merge/Match)
     ├── EnrollSession.cs           (state machine 3x-scan + polling progres)
     ├── TemplateStore.cs           (BackendTemplateStore: ambil template dari backend, lihat catatan di atas)
-    ├── HttpApi.cs                 (routing HTTP: /enroll/start, /enroll/status, /verify)
+    ├── HttpApi.cs                 (routing HTTP: /enroll/start, /enroll/status, /verify, /identify)
     ├── MiniJson.cs                (helper JSON minimal, sengaja tanpa NuGet)
     ├── EnvFile.cs                 (baca file .env sederhana, format KEY=VALUE)
     └── lib/

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -7,7 +8,7 @@ namespace FingerprintAgent
     // supaya Agent tidak butuh koneksi internet untuk restore package saat
     // build/deploy di jaringan bank yang mungkin dibatasi. Cuma menangani
     // bentuk data flat yang dipakai di sini (object rata / satu field
-    // string), bukan JSON umum.
+    // string, atau array of flat object untuk /identify), bukan JSON umum.
     public static class MiniJson
     {
         public static string WriteObject(params (string key, object value)[] fields)
@@ -37,7 +38,23 @@ namespace FingerprintAgent
             return match.Success ? Unescape(match.Groups[1].Value) : null;
         }
 
+        // Pecah array JSON flat (tanpa object bersarang) jadi daftar string
+        // object mentah, tiap elemen lalu bisa dibaca lagi pakai ExtractString.
+        public static List<string> ExtractObjects(string json)
+        {
+            var results = new List<string>();
+            foreach (Match m in Regex.Matches(json, "\\{[^{}]*\\}"))
+            {
+                results.Add(m.Value);
+            }
+            return results;
+        }
+
         private static string Escape(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"");
-        private static string Unescape(string s) => s.Replace("\\\"", "\"").Replace("\\\\", "\\");
+
+        // "/" wajib dihandle — base64 sering mengandung karakter ini, dan
+        // json_encode PHP (dipakai Laravel) meng-escape-nya jadi "\/" secara
+        // default. Tanpa ini, template yang diterima jadi rusak/invalid.
+        private static string Unescape(string s) => s.Replace("\\/", "/").Replace("\\\"", "\"").Replace("\\\\", "\\");
     }
 }

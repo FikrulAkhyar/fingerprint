@@ -3,12 +3,16 @@
 use App\Http\Controllers\FingerprintController;
 use Illuminate\Support\Facades\Route;
 
+// Satu-satunya halaman: enroll, cek sidik jari, dan daftar terdaftar.
 Route::get('/', [FingerprintController::class, 'index'])->name('fingerprints.index');
-Route::get('/enroll', [FingerprintController::class, 'enrollForm'])->name('fingerprints.enroll');
-Route::get('/verify', [FingerprintController::class, 'verifyForm'])->name('fingerprints.verify');
 
 // Dipanggil browser (JS) setelah Agent selesai capture — simpan ke DB.
 Route::post('/api/fingerprints', [FingerprintController::class, 'store'])->name('fingerprints.store');
 
-// Dipanggil Agent (server-to-server) saat /verify butuh template tersimpan.
+// Dipanggil Agent (server-to-server) saat /identify (1:N) butuh semua
+// template buat dicocokkan satu-satu.
+Route::get('/api/fingerprints', [FingerprintController::class, 'list'])->name('fingerprints.list');
+
+// Dipanggil Agent (server-to-server) saat /verify (1:1, by nama) butuh
+// template tersimpan.
 Route::get('/api/fingerprints/{nama}', [FingerprintController::class, 'show'])->name('fingerprints.show');

@@ -37,6 +37,8 @@
   header nav a.active, header nav a:hover { color: var(--primary); }
   main { max-width: 880px; margin: 32px auto; padding: 0 16px; }
   .sub { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+  @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 22px; margin-bottom: 20px; }
   .card h2 { font-size: 16px; margin: 0 0 16px; }
   label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
@@ -128,11 +130,6 @@
 <body>
 <header>
   <a href="{{ route('fingerprints.index') }}">Test Fingerprint (Laravel)</a>
-  <nav>
-    <a href="{{ route('fingerprints.index') }}" class="{{ request()->routeIs('fingerprints.index') ? 'active' : '' }}">Daftar Terdaftar</a>
-    <a href="{{ route('fingerprints.enroll') }}" class="{{ request()->routeIs('fingerprints.enroll') ? 'active' : '' }}">Enroll</a>
-    <a href="{{ route('fingerprints.verify') }}" class="{{ request()->routeIs('fingerprints.verify') ? 'active' : '' }}">Verifikasi</a>
-  </nav>
 </header>
 <main>
   @yield('content')
