@@ -1,105 +1,58 @@
 using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Text;
+using System.Net;
 
 namespace FingerprintAgent
 {
-    // Tempat menyimpan template supaya bisa diambil lagi saat /verify.
+    // Sumber template tersimpan, dipakai saat /verify.
     //
-    // PENTING: JsonFileTemplateStore ini cuma untuk testing standalone
-    // (Tahap 2) di laptop ini, TANPA CBS. Di produksi nanti, sesuai
-    // design.md §5.2, Agent akan panggil REST API CBS untuk ambil/simpan
-    // template — bukan file lokal ini. Tinggal ganti implementasi
-    // ITemplateStore-nya, endpoint HTTP Agent tidak perlu berubah.
+    // Enrollment (menyimpan template baru) TIDAK lewat sini lagi — browser
+    // yang langsung POST ke backend setelah Agent selesai capture+merge
+    // (lihat design.md §4: template naik lewat browser cuma sekali, saat
+    // enrollment). Di sini Agent cuma perlu GET template lewat backend
+    // server-to-server untuk keperluan Match(), sesuai §5.2.
+    //
+    // BackendTemplateStore ini memanggil aplikasi Laravel di web/ (yang saat
+    // ini berperan sebagai pengganti CBS untuk testing) lewat REST API biasa
+    // — begitu diarahkan ke CBS asli nanti, cukup ganti BACKEND_URL di `.env`
+    // (lihat Program.cs/EnvFile.cs), endpoint /api/fingerprints/{nama}
+    // tinggal dibuatkan yang serupa di CBS.
     public interface ITemplateStore
     {
         byte[] Get(string nama);
-        void Save(string nama, byte[] template);
-        List<EnrolledEntry> List();
     }
 
-    public class EnrolledEntry
+    public class BackendTemplateStore : ITemplateStore
     {
-        public string Nama;
-        public string EnrolledAt;
-    }
+        private readonly string _baseUrl;
 
-    public class JsonFileTemplateStore : ITemplateStore
-    {
-        private readonly string _filePath;
-        private readonly object _fileLock = new object();
-
-        public JsonFileTemplateStore(string filePath)
+        public BackendTemplateStore(string baseUrl)
         {
-            _filePath = filePath;
+            _baseUrl = baseUrl.TrimEnd('/');
         }
 
         public byte[] Get(string nama)
         {
-            lock (_fileLock)
-            {
-                var data = Load();
-                if (!data.TryGetValue(nama, out var raw))
-                    return null;
-                return Convert.FromBase64String(SplitTemplate(raw));
-            }
-        }
+            string url = _baseUrl + "/api/fingerprints/" + Uri.EscapeDataString(nama);
 
-        public void Save(string nama, byte[] template)
-        {
-            lock (_fileLock)
-            {
-                var data = Load();
-                string enrolledAt = DateTime.Now.ToString("o");
-                data[nama] = enrolledAt + "|" + Convert.ToBase64String(template);
-                Persist(data);
-            }
-        }
+            var request = (HttpWebRequest)WebRequest.Create(url);
+            request.Method = "GET";
+            request.Accept = "application/json";
+            request.Timeout = 5000;
 
-        public List<EnrolledEntry> List()
-        {
-            lock (_fileLock)
+            try
             {
-                var data = Load();
-                var result = new List<EnrolledEntry>();
-                foreach (var kv in data)
+                using (var response = (HttpWebResponse)request.GetResponse())
+                using (var reader = new System.IO.StreamReader(response.GetResponseStream()))
                 {
-                    result.Add(new EnrolledEntry
-                    {
-                        Nama = kv.Key,
-                        EnrolledAt = SplitTimestamp(kv.Value),
-                    });
+                    string body = reader.ReadToEnd();
+                    string base64 = MiniJson.ExtractString(body, "template");
+                    return base64 != null ? Convert.FromBase64String(base64) : null;
                 }
-                return result;
             }
-        }
-
-        // Nilai yang disimpan berbentuk "<timestamp>|<base64 template>".
-        private static string SplitTimestamp(string raw)
-        {
-            int idx = raw.IndexOf('|');
-            return idx >= 0 ? raw.Substring(0, idx) : "";
-        }
-
-        private static string SplitTemplate(string raw)
-        {
-            int idx = raw.IndexOf('|');
-            return idx >= 0 ? raw.Substring(idx + 1) : raw;
-        }
-
-        private Dictionary<string, string> Load()
-        {
-            if (!File.Exists(_filePath))
-                return new Dictionary<string, string>();
-
-            string json = File.ReadAllText(_filePath, Encoding.UTF8);
-            return MiniJson.ParseFlatStringDictionary(json);
-        }
-
-        private void Persist(Dictionary<string, string> data)
-        {
-            File.WriteAllText(_filePath, MiniJson.WriteFlatStringDictionary(data), Encoding.UTF8);
+            catch (WebException ex) when (ex.Response is HttpWebResponse resp && resp.StatusCode == HttpStatusCode.NotFound)
+            {
+                return null; // belum terdaftar
+            }
         }
     }
 }

@@ -57,8 +57,6 @@ namespace FingerprintAgent
                     HandleEnrollStatus(req, res);
                 else if (req.HttpMethod == "POST" && req.Url.AbsolutePath == "/verify")
                     HandleVerify(req, res);
-                else if (req.HttpMethod == "GET" && req.Url.AbsolutePath == "/enrollments")
-                    HandleListEnrollments(res);
                 else
                     WriteJson(res, 404, MiniJson.WriteObject(("error", "Not found")));
             }
@@ -127,23 +125,6 @@ namespace FingerprintAgent
 
             int score = _zk.Match(captured, stored);
             WriteJson(res, 200, MiniJson.WriteObject(("match", score > 0), ("score", score)));
-        }
-
-        // NB: endpoint testing-only, listing dari templates.json lokal.
-        // Di produksi, daftar nasabah terdaftar biometrik ditampilkan oleh
-        // CBS sendiri dari tabel nasabah_fingerprint (§6 design.md), bukan
-        // dari Agent.
-        private void HandleListEnrollments(HttpListenerResponse res)
-        {
-            var entries = _store.List();
-            var items = new System.Collections.Generic.List<string>();
-            foreach (var entry in entries)
-            {
-                items.Add(MiniJson.WriteObject(
-                    ("nama", entry.Nama),
-                    ("enrolled_at", entry.EnrolledAt)));
-            }
-            WriteJson(res, 200, MiniJson.WriteArray(items));
         }
 
         private static string ReadBody(HttpListenerRequest req)

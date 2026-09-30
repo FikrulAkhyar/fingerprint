@@ -47,9 +47,43 @@ auto-start, lihat di bawah).
 5. (Opsional, disarankan) supaya Agent otomatis nyala tiap kali Windows
    login — tidak perlu double-click manual tiap hari — klik kanan
    `install-autostart.ps1` > **Run with PowerShell** (sekali saja).
-6. Buka file `test-web/index.html` (bisa dipindah bareng lewat USB juga)
-   langsung di browser — halaman ini otomatis cek koneksi ke Agent, lalu
-   bisa dipakai untuk coba Enroll & Verifikasi.
+6. Jalankan aplikasi web-nya (folder `web/` di project ini, Laravel) —
+   `cd web && php artisan serve`, lalu buka `http://127.0.0.1:8000` di
+   browser. Halaman ini yang dipakai untuk Enroll, Verifikasi, dan lihat
+   daftar terdaftar (datanya di database, bukan lagi file lokal).
+
+## Menjalankan Agent & backend di laptop berbeda (1 jaringan WiFi)
+
+Agent tidak harus di laptop yang sama dengan backend-nya — bisa dipisah, asal
+kedua laptop tersambung ke **WiFi/jaringan yang sama** dan tidak ada
+"client/AP isolation" yang memblokir laptop saling akses (beberapa WiFi
+publik/kantor mengaktifkan ini — kalau tidak bisa connect padahal sudah satu
+jaringan, ini kemungkinan penyebabnya).
+
+Contoh: alat & Agent di **laptop A** (Windows), backend (Laravel, untuk saat
+ini) di **laptop B** (mis. `192.168.10.62`):
+
+1. Di laptop B, jalankan Laravel supaya bisa diakses dari luar (`--host=0.0.0.0`,
+   bukan `php artisan serve` biasa yang cuma bisa diakses dari laptop itu sendiri):
+   ```
+   cd web
+   php artisan serve --host=0.0.0.0 --port=8000
+   ```
+   Cari IP laptop B: Windows `ipconfig`, Mac/Linux `ifconfig` atau
+   System Settings > Wi-Fi > Details.
+2. Di laptop A, edit `agent/.env` (dibuat otomatis setelah Agent pernah
+   dijalankan sekali) isinya jadi:
+   ```
+   BACKEND_URL=http://192.168.10.62:8000
+   ```
+   Lalu jalankan ulang Agent-nya (tidak perlu build ulang — ini cuma file teks).
+3. Buka browser **di laptop A** (karena di situ ada alat & Agent-nya) ke
+   `http://192.168.10.62:8000` — bukan `127.0.0.1`, supaya bisa muat halaman
+   dari laptop B.
+
+Yang **tidak berubah**: `AGENT_URL` di halaman web tetap `127.0.0.1:9001`,
+karena browser & Agent memang harus di laptop yang sama (Agent cuma bisa
+diakses dari mesin tempat dia jalan, tidak lewat jaringan).
 
 ## Pemakaian sehari-hari (untuk user non-IT)
 
@@ -61,10 +95,20 @@ icon-nya tidak ada, double-click `FingerprintAgent.exe` di
 
 ## Yang perlu diketahui
 
-- **Penyimpanan template masih sementara** (`templates.json`, dibuat otomatis
-  di folder yang sama saat run) — ini cuma untuk testing standalone tanpa
-  CBS. Di produksi nanti diganti panggilan ke REST API CBS (lihat
-  `TemplateStore.cs` dan `design.md` §5.2).
+- **Penyimpanan template sekarang di database lewat backend**, bukan file
+  lokal lagi. Kode Agent-nya (`BackendTemplateStore`, `.env` / `BACKEND_URL`)
+  sengaja dibuat generic — tidak nge-hardcode "Laravel" — karena backend ini
+  cuma pengganti sementara untuk testing, nanti diarahkan ke **CBS asli**
+  tanpa perlu ubah kode Agent, cukup ganti isi `agent/.env`. Saat ini
+  backend-nya adalah aplikasi Laravel di `web/`. Alurnya: saat enroll,
+  browser yang POST template ke backend (`web/routes/web.php`) setelah Agent
+  selesai capture+merge; saat verifikasi, Agent sendiri yang `GET` template
+  dari backend (server-to-server, lihat `TemplateStore.cs`) lalu `Match()`
+  lokal — ini mendekati arsitektur produksi asli di `design.md` §5.2 (backend
+  testing ini berperan seperti CBS, walau CBS asli nanti pakai PHP Slim,
+  bukan Laravel). **Backend-nya harus sudah jalan** (`php artisan serve` untuk
+  saat ini) sebelum Agent dites, kalau tidak `/verify` akan gagal karena
+  tidak bisa ambil template.
 - Enrollment butuh **scan jari yang sama 3x** — ini persyaratan SDK
   (`DBMerge`), bukan bug.
 - Kalau device gagal diinisialisasi (alat belum dicolok, driver belum
@@ -90,18 +134,22 @@ icon-nya tidak ada, double-click `FingerprintAgent.exe` di
 agent/
 ├── README.md                     (file ini)
 ├── install-autostart.ps1          (sekali klik: auto-start Agent tiap login Windows)
+├── .env.example                    (contoh isi .env — copy jadi .env kalau mau ubah manual)
+├── .env                            (dibuat otomatis saat run pertama, isinya BACKEND_URL — di-gitignore)
 ├── driver/setup.exe               (installer driver reader ZKTeco)
 ├── docs/ZKFinger Reader SDK C#_en_V2.pdf   (referensi resmi API SDK)
 └── FingerprintAgent/
     ├── FingerprintAgent.csproj
-    ├── Program.cs                 (entry point, WinExe — tanpa jendela console)
+    ├── icon.ico                   (icon fingerprint — dipakai .exe & system tray)
+    ├── Program.cs                 (entry point, WinExe — tanpa jendela console; cari .env naik ke agent/)
     ├── TrayApplicationContext.cs  (icon system tray + menu Keluar)
     ├── Logger.cs                  (tulis log ke agent.log, pengganti Console)
     ├── ZkFingerService.cs         (wrapper SDK: Init/Capture/Merge/Match)
     ├── EnrollSession.cs           (state machine 3x-scan + polling progres)
-    ├── TemplateStore.cs           (penyimpanan sementara, lihat catatan di atas)
+    ├── TemplateStore.cs           (BackendTemplateStore: ambil template dari backend, lihat catatan di atas)
     ├── HttpApi.cs                 (routing HTTP: /enroll/start, /enroll/status, /verify)
     ├── MiniJson.cs                (helper JSON minimal, sengaja tanpa NuGet)
+    ├── EnvFile.cs                 (baca file .env sederhana, format KEY=VALUE)
     └── lib/
         ├── libzkfpcsharp.dll       (x64, dipakai default)
         └── x86/libzkfpcsharp.dll   (cadangan kalau Windows-nya 32-bit)

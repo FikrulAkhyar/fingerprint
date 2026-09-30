@@ -1,1 +1,9 @@
 design.md
+
+# Fingerprint Agent (.NET) — build output & runtime-only files
+agent/FingerprintAgent/bin/
+agent/FingerprintAgent/obj/
+agent/FingerprintAgent/.vs/
+agent/FingerprintAgent/agent.log
+agent/.env
+*.user

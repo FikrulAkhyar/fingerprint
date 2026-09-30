@@ -23,7 +23,7 @@ namespace FingerprintAgent
 
             _trayIcon = new NotifyIcon
             {
-                Icon = SystemIcons.Application,
+                Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath),
                 Text = "Fingerprint Agent — Aktif",
                 ContextMenuStrip = menu,
                 Visible = true,

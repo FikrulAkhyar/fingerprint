@@ -25,12 +25,10 @@ namespace FingerprintAgent
         private readonly ConcurrentDictionary<string, EnrollSession> _sessions =
             new ConcurrentDictionary<string, EnrollSession>();
         private readonly ZkFingerService _zk;
-        private readonly ITemplateStore _store;
 
-        public EnrollSessionManager(ZkFingerService zk, ITemplateStore store)
+        public EnrollSessionManager(ZkFingerService zk)
         {
             _zk = zk;
-            _store = store;
         }
 
         public EnrollSession Start(string nama)
@@ -66,8 +64,10 @@ namespace FingerprintAgent
                 }
 
                 byte[] merged = _zk.MergeTemplates(scans[0], scans[1], scans[2]);
-                _store.Save(session.Nama, merged);
 
+                // Template dikembalikan ke browser saja — browser yang POST
+                // ke Laravel (lihat resources/views/fingerprints/enroll.blade.php
+                // di web/). Agent tidak menyimpan apa pun secara permanen.
                 session.TemplateBase64 = Convert.ToBase64String(merged);
                 session.Success = true;
                 session.Done = true;

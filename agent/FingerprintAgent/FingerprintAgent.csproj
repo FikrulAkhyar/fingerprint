@@ -8,6 +8,8 @@
     <AssemblyName>FingerprintAgent</AssemblyName>
     <RootNamespace>FingerprintAgent</RootNamespace>
     <LangVersion>latest</LangVersion>
+    <!-- Icon file .exe itu sendiri (yang tampil di Explorer/Task Manager) -->
+    <ApplicationIcon>icon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
