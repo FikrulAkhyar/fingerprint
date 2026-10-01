@@ -16,7 +16,7 @@ namespace FingerprintAgent
     //
     // BackendTemplateStore ini memanggil aplikasi Laravel di web/ (yang saat
     // ini berperan sebagai pengganti CBS untuk testing) lewat REST API biasa
-    // — begitu diarahkan ke CBS asli nanti, cukup ganti BACKEND_URL di `.env`
+    // — begitu diarahkan ke CBS asli nanti, cukup ganti ARB_URL di `.env`
     // (lihat Program.cs/EnvFile.cs), endpoint /api/fingerprints/{nama}
     // tinggal dibuatkan yang serupa di CBS.
     public interface ITemplateStore
@@ -27,9 +27,16 @@ namespace FingerprintAgent
 
     public class BackendTemplateStore : ITemplateStore
     {
-        private readonly string _baseUrl;
+        // Bukan readonly — bisa diganti saat runtime lewat UpdateBaseUrl(),
+        // dipakai menu "Ubah ARB_URL..." di system tray (TrayApplicationContext).
+        private string _baseUrl;
 
         public BackendTemplateStore(string baseUrl)
+        {
+            _baseUrl = baseUrl.TrimEnd('/');
+        }
+
+        public void UpdateBaseUrl(string baseUrl)
         {
             _baseUrl = baseUrl.TrimEnd('/');
         }

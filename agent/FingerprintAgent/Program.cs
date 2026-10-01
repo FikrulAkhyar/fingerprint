@@ -2,34 +2,42 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Windows.Forms;
+using Microsoft.VisualBasic;
 
 namespace FingerprintAgent
 {
     static class Program
     {
-        private const string DefaultBackendBaseUrl = "http://127.0.0.1:8000";
-
-        // "127.0.0.1" = cuma bisa diakses dari laptop ini sendiri (default,
-        // paling aman). Ganti ke "+" di .env (AGENT_BIND_HOST=+) supaya bisa
-        // diakses dari laptop lain di jaringan yang sama — lihat README untuk
-        // langkah setup tambahan yang dibutuhkan Windows (izin bind & firewall).
-        private const string DefaultAgentBindHost = "127.0.0.1";
+        private const string DefaultArbUrl = "http://127.0.0.1:8000";
 
         [STAThread]
         static void Main()
         {
             Logger.Info("Agent starting...");
 
-            var env = EnvFile.Load(FindOrCreateEnvFile());
-            string backendBaseUrl = env.TryGetValue("BACKEND_URL", out var url) && !string.IsNullOrEmpty(url)
-                ? url
-                : DefaultBackendBaseUrl;
-            string bindHost = env.TryGetValue("AGENT_BIND_HOST", out var host) && !string.IsNullOrEmpty(host)
-                ? host
-                : DefaultAgentBindHost;
+            string envPath = FindOrCreateEnvFile();
+            var env = EnvFile.Load(envPath);
 
-            Logger.Info("Backend base URL: " + backendBaseUrl);
-            Logger.Info("Agent bind host: " + bindHost);
+            string arbUrl;
+            if (env.TryGetValue("ARB_URL", out var existing) && !string.IsNullOrWhiteSpace(existing))
+            {
+                // Sudah ada isinya — langsung pakai, tanpa dialog, supaya
+                // start sehari-hari (termasuk auto-start) tetap diam/silent.
+                arbUrl = existing;
+            }
+            else
+            {
+                // .env belum ada atau ARB_URL-nya masih kosong — baru di
+                // sini minta diisi. Sekali diisi, tidak akan ditanya lagi.
+                string input = Interaction.InputBox(
+                    "Alamat backend (ARB_URL) — tempat Agent simpan/ambil data sidik jari:",
+                    "Fingerprint Agent - Konfigurasi Awal",
+                    DefaultArbUrl);
+                arbUrl = string.IsNullOrWhiteSpace(input) ? DefaultArbUrl : input.Trim();
+                EnvFile.Set(envPath, "ARB_URL", arbUrl);
+            }
+
+            Logger.Info("ARB_URL: " + arbUrl);
 
             var zk = new ZkFingerService();
             try
@@ -50,9 +58,15 @@ namespace FingerprintAgent
 
             Logger.Info("Device siap.");
 
-            var store = new BackendTemplateStore(backendBaseUrl);
+            var store = new BackendTemplateStore(arbUrl);
             var enrollManager = new EnrollSessionManager(zk);
-            string prefix = "http://" + bindHost + ":9001/";
+
+            // Bind ke 127.0.0.1 saja — browser yang memicu scan selalu di
+            // laptop yang sama dengan Agent (JS CBS jalan di browser teller,
+            // bukan di server CBS, jadi localhost selalu cukup apa pun
+            // hosting CBS-nya). Tidak perlu diakses dari jaringan luar sama
+            // sekali di produksi; lihat design.md §7 kenapa ini defaultnya.
+            const string prefix = "http://127.0.0.1:9001/";
             var api = new HttpApi(prefix, zk, enrollManager, store);
 
             var httpThread = new Thread(() =>
@@ -65,9 +79,7 @@ namespace FingerprintAgent
                 {
                     Logger.Error("HTTP API berhenti: " + ex.Message);
                     MessageBox.Show(
-                        "Agent gagal membuka port 9001:\n\n" + ex.Message +
-                        "\n\nKalau AGENT_BIND_HOST di .env di-set ke \"+\", pastikan sudah jalankan " +
-                        "'netsh http add urlacl' (lihat README) atau jalankan Agent sebagai Administrator.",
+                        "Agent gagal membuka port 9001:\n\n" + ex.Message,
                         "Fingerprint Agent - Error",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Error);
@@ -78,7 +90,7 @@ namespace FingerprintAgent
 
             Logger.Info("Agent siap di " + prefix);
 
-            using (var trayContext = new TrayApplicationContext(zk))
+            using (var trayContext = new TrayApplicationContext(zk, prefix, envPath, store, arbUrl))
             {
                 Application.Run(trayContext);
             }
@@ -105,11 +117,10 @@ namespace FingerprintAgent
                 .Parent?.Parent?.Parent?.Parent?.FullName
                 ?? AppDomain.CurrentDomain.BaseDirectory;
 
+            // Sengaja dibuat kosong (bukan diisi DefaultArbUrl) supaya Main()
+            // tahu ini instalasi baru dan perlu munculkan dialog pengisian.
             string newPath = Path.Combine(agentDir, ".env");
-            File.WriteAllText(newPath,
-                "BACKEND_URL=" + DefaultBackendBaseUrl + Environment.NewLine +
-                "# AGENT_BIND_HOST=+ untuk bisa diakses dari laptop lain (lihat README)" + Environment.NewLine +
-                "AGENT_BIND_HOST=" + DefaultAgentBindHost + Environment.NewLine);
+            File.WriteAllText(newPath, "ARB_URL=" + Environment.NewLine);
             return newPath;
         }
     }

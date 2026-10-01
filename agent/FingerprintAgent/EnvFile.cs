@@ -32,5 +32,27 @@ namespace FingerprintAgent
 
             return values;
         }
+
+        // Ubah/tambah satu key, baris & komentar lain tetap dipertahankan.
+        public static void Set(string path, string key, string value)
+        {
+            var lines = File.Exists(path) ? new List<string>(File.ReadAllLines(path)) : new List<string>();
+            bool found = false;
+
+            for (int i = 0; i < lines.Count; i++)
+            {
+                if (lines[i].TrimStart().StartsWith(key + "="))
+                {
+                    lines[i] = key + "=" + value;
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found)
+                lines.Add(key + "=" + value);
+
+            File.WriteAllLines(path, lines);
+        }
     }
 }

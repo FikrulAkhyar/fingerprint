@@ -6,11 +6,24 @@ supaya bisa diedit di editor apa pun (termasuk di Mac), tapi **build & run
 tetap wajib di Windows** karena `libzkfpcsharp.dll` dan device-nya cuma jalan
 di situ.
 
-**Tidak ada terminal/console yang perlu dibuka sehari-hari** — Agent jalan
-sebagai icon kecil di system tray (pojok kanan bawah Windows), tanpa jendela.
-Build lewat command line itu cuma dilakukan **sekali** oleh yang setup
-(develop/IT); user sehari-hari cukup double-click `.exe`-nya (atau biarkan
-auto-start, lihat di bawah).
+**Tidak ada terminal/console sama sekali** — Agent jalan sebagai icon kecil
+di system tray (pojok kanan bawah Windows). Build lewat command line itu
+cuma dilakukan **sekali** oleh yang setup (develop/IT); user sehari-hari
+cukup double-click `.exe`-nya (atau biarkan auto-start, lihat di bawah).
+
+**Dialog pengisian `ARB_URL` cuma muncul sekali** — pas pertama kali Agent
+dijalankan dan `agent/.env` belum ada/masih kosong. Begitu terisi, start
+berikutnya (termasuk auto-start saat Windows login) **langsung jalan tanpa
+dialog apa pun**, benar-benar silent. Kalau nanti perlu ganti alamat backend,
+tidak perlu edit `.env` manual atau restart Agent — klik kanan icon di tray,
+pilih **"Ubah ARB_URL..."**, isi alamat baru, langsung berlaku saat itu juga
+(otomatis tersimpan ke `.env` juga).
+
+**Agent cuma bisa diakses dari laptop itu sendiri** (bind ke `127.0.0.1`) —
+ini sengaja dan memang cukup: JS di halaman CBS jalan di browser teller
+(laptop yang sama dengan Agent), bukan di server CBS, jadi `127.0.0.1`
+selalu bisa diakses apa pun bentuk hosting CBS-nya. Tidak ada rencana
+expose Agent ke jaringan luar sama sekali — lihat `design.md` §7.
 
 ## Yang perlu disiapkan di laptop Windows (sekali saja)
 
@@ -47,85 +60,35 @@ auto-start, lihat di bawah).
 5. (Opsional, disarankan) supaya Agent otomatis nyala tiap kali Windows
    login — tidak perlu double-click manual tiap hari — klik kanan
    `install-autostart.ps1` > **Run with PowerShell** (sekali saja).
-6. Jalankan aplikasi web-nya (folder `web/` di project ini, Laravel) —
-   `cd web && php artisan serve`, lalu buka `http://127.0.0.1:8000` di
-   browser. Halaman ini yang dipakai untuk Enroll, Verifikasi, dan lihat
-   daftar terdaftar (datanya di database, bukan lagi file lokal).
+6. Pastikan backend-nya (lihat `ARB_URL`, bagian "Yang perlu diketahui" di
+   bawah) sudah jalan sebelum dipakai — tanpa itu `/enroll`, `/verify`, dan
+   `/identify` tidak bisa menyimpan/mengambil template.
 
-## Menjalankan Agent & backend di laptop berbeda (1 jaringan WiFi)
+## Menjalankan Agent, backend, & browser di laptop berbeda (1 jaringan WiFi)
 
-Agent tidak harus di laptop yang sama dengan backend-nya — bisa dipisah, asal
-kedua laptop tersambung ke **WiFi/jaringan yang sama** dan tidak ada
-"client/AP isolation" yang memblokir laptop saling akses (beberapa WiFi
+**Browser yang memicu scan wajib dibuka di laptop yang sama dengan Agent**
+(Agent cuma bind ke `127.0.0.1`, tidak bisa diakses lewat jaringan — lihat
+catatan keamanan di atas). Yang **boleh** di laptop/server lain cuma
+backend-nya, karena itu Agent sendiri yang manggil keluar (server-to-server),
+bukan sebaliknya.
+
+Kalau backend dijalankan di laptop/server terpisah (mis. `192.168.10.62`):
+
+1. Pastikan backend-nya bisa diakses dari luar mesin itu sendiri (bukan cuma
+   `localhost`) — caranya tergantung backend-nya (web server apa yang dipakai).
+2. Di laptop Agent, edit `agent/.env` (dibuat otomatis setelah Agent pernah
+   dijalankan sekali), atau pakai menu **"Ubah ARB_URL..."** di tray:
+   ```
+   ARB_URL=http://192.168.10.62:8000
+   ```
+3. Buka browser **di laptop yang sama dengan Agent** (bukan di laptop
+   backend) untuk memicu scan — Agent-nya sendiri yang akan manggil ke
+   `ARB_URL` itu di belakang layar.
+
+Agent dan backend perlu **satu jaringan WiFi/LAN yang sama** dan tidak ada
+"client/AP isolation" yang memblokir perangkat saling akses (beberapa WiFi
 publik/kantor mengaktifkan ini — kalau tidak bisa connect padahal sudah satu
 jaringan, ini kemungkinan penyebabnya).
-
-Contoh: alat & Agent di **laptop A** (Windows), backend (Laravel, untuk saat
-ini) di **laptop B** (mis. `192.168.10.62`):
-
-1. Di laptop B, jalankan Laravel supaya bisa diakses dari luar (`--host=0.0.0.0`,
-   bukan `php artisan serve` biasa yang cuma bisa diakses dari laptop itu sendiri):
-   ```
-   cd web
-   php artisan serve --host=0.0.0.0 --port=8000
-   ```
-   Cari IP laptop B: Windows `ipconfig`, Mac/Linux `ifconfig` atau
-   System Settings > Wi-Fi > Details.
-2. Di laptop A, edit `agent/.env` (dibuat otomatis setelah Agent pernah
-   dijalankan sekali) isinya jadi:
-   ```
-   BACKEND_URL=http://192.168.10.62:8000
-   ```
-   Lalu jalankan ulang Agent-nya (tidak perlu build ulang — ini cuma file teks).
-3. Buka browser **di laptop A** (karena di situ ada alat & Agent-nya) ke
-   `http://192.168.10.62:8000` — bukan `127.0.0.1`, supaya bisa muat halaman
-   dari laptop B.
-
-Yang **tidak berubah** untuk skenario di atas: browser tetap harus dibuka di
-laptop yang sama dengan Agent (Agent cuma bisa diakses dari mesin tempat dia
-jalan, tidak lewat jaringan) — kecuali Anda mengaktifkan akses jarak jauh ke
-Agent seperti di bawah ini.
-
-## Mengakses Agent dari laptop lain (mis. testing/debug dari Mac)
-
-Secara default Agent bind ke `127.0.0.1` (localhost) — sengaja, ini yang
-paling aman (lihat `design.md` §7: Agent tidak boleh diakses dari luar
-localhost, supaya halaman web sembarangan tidak bisa diam-diam memanggilnya).
-Tapi untuk kebutuhan testing/debug langsung dari laptop lain (mis. curl dari
-Mac ke Agent yang jalan di Windows), ini bisa diaktifkan:
-
-1. **Windows (laptop tempat Agent jalan)** — sekali saja, buka Command
-   Prompt / PowerShell **as Administrator**, jalankan:
-   ```
-   netsh http add urlacl url=http://+:9001/ user=Everyone
-   netsh advfirewall firewall add rule name="FingerprintAgent" dir=in action=allow protocol=TCP localport=9001
-   ```
-   Baris pertama mengizinkan Agent bind ke semua network interface tanpa
-   perlu run-as-admin setiap kali jalan; baris kedua membuka portnya di
-   Windows Firewall.
-2. Edit `agent/.env`, ubah:
-   ```
-   AGENT_BIND_HOST=+
-   ```
-3. Jalankan ulang `FingerprintAgent.exe` (tidak perlu build ulang — ini cuma
-   file `.env`). Cek `agent.log`, harus muncul `Agent bind host: +`.
-4. Cari IP laptop Windows-nya (`ipconfig`, lihat IPv4 Address di adapter
-   Wi-Fi/Ethernet yang aktif), misal `192.168.10.50`.
-5. Dari laptop lain (Mac dkk.), akses lewat IP itu, bukan `127.0.0.1`:
-   ```
-   curl http://192.168.10.50:9001/enroll/start -X POST -H "Content-Type: application/json" -d "{\"nama\":\"test\"}"
-   ```
-   Kalau mau diakses lewat halaman web (bukan curl), edit `AGENT_URL` di
-   `web/.env` jadi `http://192.168.10.50:9001` (lihat `web/README.md`) —
-   tidak perlu ubah kode/blade manapun, sama seperti `BACKEND_URL` di sisi
-   Agent.
-
-**Catatan keamanan**: dengan `AGENT_BIND_HOST=+`, siapa pun di jaringan yang
-sama bisa memanggil Agent (termasuk memicu capture sidik jari). Ini oke untuk
-jaringan testing pribadi/kantor yang tepercaya, tapi jangan dipakai dengan
-setting ini di jaringan publik atau di laptop produksi — kembalikan ke
-`AGENT_BIND_HOST=127.0.0.1` (atau hapus baris itu dari `.env`) begitu selesai
-testing.
 
 ## Pemakaian sehari-hari (untuk user non-IT)
 
@@ -137,27 +100,35 @@ icon-nya tidak ada, double-click `FingerprintAgent.exe` di
 
 ## Yang perlu diketahui
 
-- **Penyimpanan template sekarang di database lewat backend**, bukan file
-  lokal lagi. Kode Agent-nya (`BackendTemplateStore`, `.env` / `BACKEND_URL`)
-  sengaja dibuat generic — tidak nge-hardcode "Laravel" — karena backend ini
-  cuma pengganti sementara untuk testing, nanti diarahkan ke **CBS asli**
-  tanpa perlu ubah kode Agent, cukup ganti isi `agent/.env`. Saat ini
-  backend-nya adalah aplikasi Laravel di `web/`. Alurnya: saat enroll,
-  browser yang POST template ke backend (`web/routes/web.php`) setelah Agent
-  selesai capture+merge; saat verifikasi, Agent sendiri yang `GET` template
-  dari backend (server-to-server, lihat `TemplateStore.cs`) lalu `Match()`
-  lokal — ini mendekati arsitektur produksi asli di `design.md` §5.2 (backend
-  testing ini berperan seperti CBS, walau CBS asli nanti pakai PHP Slim,
-  bukan Laravel). **Backend-nya harus sudah jalan** (`php artisan serve` untuk
-  saat ini) sebelum Agent dites, kalau tidak `/verify`/`/identify` akan
-  gagal karena tidak bisa ambil template.
+- **Cek status & ubah ARB_URL dari tray**: klik kanan icon di system tray —
+  ada baris info (tidak bisa diklik) nunjukkin alamat Agent sendiri
+  (`Listen: ...`) dan alamat backend yang lagi dipakai (`ARB_URL: ...`), plus
+  menu **"Ubah ARB_URL..."** buat ganti alamat backend kapan saja tanpa
+  restart Agent (langsung berlaku & otomatis tersimpan ke `.env`).
+- **Migrasi dari versi lama**: kalau `agent/.env` di laptop Anda masih punya
+  `BACKEND_URL=...` dan/atau `AGENT_BIND_HOST=...` dari setup sebelumnya,
+  itu **tidak terbaca lagi** — ganti nama key `BACKEND_URL` jadi `ARB_URL`,
+  dan hapus baris `AGENT_BIND_HOST` kalau ada (Agent sekarang selalu bind ke
+  `127.0.0.1` saja, tidak ada opsi lain).
+- **Agent tidak menyimpan template apa pun secara permanen** — itu tugas
+  **backend** (via `ARB_URL`), yang bisa berupa aplikasi apa pun selama
+  menyediakan 3 endpoint sesuai kontrak di `design.md` §5.2:
+  `POST /api/fingerprints` (simpan, dipanggil browser setelah Agent selesai
+  capture+merge), `GET /api/fingerprints/{nama}` (ambil 1 template by nama,
+  dipanggil Agent server-to-server saat `/verify`), dan
+  `GET /api/fingerprints` (ambil semua template, dipanggil Agent
+  server-to-server saat `/identify`). Kode Agent-nya (`BackendTemplateStore`)
+  sengaja generic — tidak terikat framework/bahasa backend tertentu — supaya
+  gampang diarahkan ke **CBS asli** nanti, cukup ganti `ARB_URL`, tanpa ubah
+  kode Agent sama sekali. **Backend-nya harus sudah jalan** sebelum dipakai,
+  kalau tidak `/verify`/`/identify` akan gagal karena tidak bisa ambil
+  template.
 - **`POST /identify`** — endpoint tambahan (testing convenience, di luar
   kontrak resmi §5.1 `design.md`) buat cek sidik jari **tanpa isi nama**:
   Agent ambil semua template dari backend (`GET /api/fingerprints`), lalu
-  `Match()` satu-satu, kembalikan yang skornya tertinggi. Ini yang dipakai
-  halaman web sekarang untuk "Cek Sidik Jari". `POST /verify` (by nama, 1:1)
-  tetap ada di kode untuk kebutuhan nanti kalau CBS asli mau pakai pola
-  1:1 sesuai proses bisnis yang sudah dikonfirmasi di `design.md`.
+  `Match()` satu-satu, kembalikan yang skornya tertinggi. `POST /verify`
+  (by nama, 1:1) tetap ada di kode untuk kebutuhan nanti kalau CBS asli mau
+  pakai pola 1:1 sesuai proses bisnis yang sudah dikonfirmasi di `design.md`.
 - Enrollment butuh **scan jari yang sama 3x** — ini persyaratan SDK
   (`DBMerge`), bukan bug.
 - **"Gagal menggabungkan hasil scan" / `DBMerge` kode `-22` (`ZKFP_ERR_MERGE`)**
@@ -194,13 +165,13 @@ agent/
 ├── README.md                     (file ini)
 ├── install-autostart.ps1          (sekali klik: auto-start Agent tiap login Windows)
 ├── .env.example                    (contoh isi .env — copy jadi .env kalau mau ubah manual)
-├── .env                            (dibuat otomatis saat run pertama, isinya BACKEND_URL — di-gitignore)
+├── .env                            (dibuat otomatis saat run pertama, isinya ARB_URL — di-gitignore)
 ├── driver/setup.exe               (installer driver reader ZKTeco)
 ├── docs/ZKFinger Reader SDK C#_en_V2.pdf   (referensi resmi API SDK)
 └── FingerprintAgent/
     ├── FingerprintAgent.csproj
     ├── icon.ico                   (icon fingerprint — dipakai .exe & system tray)
-    ├── Program.cs                 (entry point, WinExe — tanpa jendela console; cari .env naik ke agent/)
+    ├── Program.cs                 (entry point; dialog ARB_URL di awal; cari .env naik ke agent/)
     ├── TrayApplicationContext.cs  (icon system tray + menu Keluar)
     ├── Logger.cs                  (tulis log ke agent.log, pengganti Console)
     ├── ZkFingerService.cs         (wrapper SDK: Init/Capture/Merge/Match)

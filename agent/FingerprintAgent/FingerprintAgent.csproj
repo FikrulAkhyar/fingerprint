@@ -20,6 +20,8 @@
     <!-- Dipakai untuk system tray icon (NotifyIcon) & MessageBox error -->
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Drawing" />
+    <!-- Dipakai untuk dialog input ARB_URL (Interaction.InputBox) -->
+    <Reference Include="Microsoft.VisualBasic" />
   </ItemGroup>
 
 </Project>
