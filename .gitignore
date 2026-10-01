@@ -6,4 +6,5 @@ agent/FingerprintAgent/obj/
 agent/FingerprintAgent/.vs/
 agent/FingerprintAgent/agent.log
 agent/.env
+agent/.arb-session
 *.user

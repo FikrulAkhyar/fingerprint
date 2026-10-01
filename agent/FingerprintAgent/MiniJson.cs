@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -7,8 +6,8 @@ namespace FingerprintAgent
     // Helper JSON super minimal — sengaja tanpa library eksternal (NuGet)
     // supaya Agent tidak butuh koneksi internet untuk restore package saat
     // build/deploy di jaringan bank yang mungkin dibatasi. Cuma menangani
-    // bentuk data flat yang dipakai di sini (object rata / satu field
-    // string, atau array of flat object untuk /identify), bukan JSON umum.
+    // bentuk data flat yang dipakai di sini (object rata, satu field string),
+    // bukan JSON umum.
     public static class MiniJson
     {
         public static string WriteObject(params (string key, object value)[] fields)
@@ -36,18 +35,6 @@ namespace FingerprintAgent
         {
             var match = Regex.Match(json, "\"" + Regex.Escape(key) + "\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
             return match.Success ? Unescape(match.Groups[1].Value) : null;
-        }
-
-        // Pecah array JSON flat (tanpa object bersarang) jadi daftar string
-        // object mentah, tiap elemen lalu bisa dibaca lagi pakai ExtractString.
-        public static List<string> ExtractObjects(string json)
-        {
-            var results = new List<string>();
-            foreach (Match m in Regex.Matches(json, "\\{[^{}]*\\}"))
-            {
-                results.Add(m.Value);
-            }
-            return results;
         }
 
         private static string Escape(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"");

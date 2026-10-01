@@ -15,13 +15,15 @@ namespace FingerprintAgent
         private readonly ZkFingerService _zk;
         private readonly BackendTemplateStore _store;
         private readonly string _envPath;
+        private readonly ArbAuthService _auth;
         private readonly ToolStripItem _arbUrlMenuItem;
 
-        public TrayApplicationContext(ZkFingerService zk, string listenAddress, string envPath, BackendTemplateStore store, string arbUrl)
+        public TrayApplicationContext(ZkFingerService zk, string listenAddress, string envPath, BackendTemplateStore store, string arbUrl, ArbAuthService auth)
         {
             _zk = zk;
             _store = store;
             _envPath = envPath;
+            _auth = auth;
 
             var menu = new ContextMenuStrip();
             menu.Items.Add("Fingerprint Agent — Aktif").Enabled = false;
@@ -68,6 +70,7 @@ namespace FingerprintAgent
         {
             Logger.Info("Agent dihentikan lewat menu tray.");
             _trayIcon.Visible = false;
+            _auth.Logout(); // best-effort — supaya akun sistem ARB+ tidak nyangkut "masih login"
             _zk.Dispose();
             Application.Exit();
         }

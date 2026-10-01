@@ -76,8 +76,8 @@ Di beberapa Windows (tergantung konfigurasi/kebijakan sistemnya), bind ke
    login — tidak perlu double-click manual tiap hari — klik kanan
    `install-autostart.ps1` > **Run with PowerShell** (sekali saja).
 6. Pastikan backend-nya (lihat `ARB_URL`, bagian "Yang perlu diketahui" di
-   bawah) sudah jalan sebelum dipakai — tanpa itu `/enroll`, `/verify`, dan
-   `/identify` tidak bisa menyimpan/mengambil template.
+   bawah) sudah jalan sebelum dipakai — tanpa itu `/enroll` dan `/verify`
+   tidak bisa menyimpan/mengambil template.
 
 ## Menjalankan Agent, backend, & browser di laptop berbeda (1 jaringan WiFi)
 
@@ -126,24 +126,25 @@ icon-nya tidak ada, double-click `FingerprintAgent.exe` di
   dan hapus baris `AGENT_BIND_HOST` kalau ada (Agent sekarang selalu bind ke
   `127.0.0.1` saja, tidak ada opsi lain).
 - **Agent tidak menyimpan template apa pun secara permanen** — itu tugas
-  **backend** (via `ARB_URL`), yang bisa berupa aplikasi apa pun selama
-  menyediakan 3 endpoint sesuai kontrak di `design.md` §5.2:
-  `POST /api/fingerprints` (simpan, dipanggil browser setelah Agent selesai
-  capture+merge), `GET /api/fingerprints/{nama}` (ambil 1 template by nama,
-  dipanggil Agent server-to-server saat `/verify`), dan
-  `GET /api/fingerprints` (ambil semua template, dipanggil Agent
-  server-to-server saat `/identify`). Kode Agent-nya (`BackendTemplateStore`)
-  sengaja generic — tidak terikat framework/bahasa backend tertentu — supaya
-  gampang diarahkan ke **CBS asli** nanti, cukup ganti `ARB_URL`, tanpa ubah
-  kode Agent sama sekali. **Backend-nya harus sudah jalan** sebelum dipakai,
-  kalau tidak `/verify`/`/identify` akan gagal karena tidak bisa ambil
-  template.
-- **`POST /identify`** — endpoint tambahan (testing convenience, di luar
-  kontrak resmi §5.1 `design.md`) buat cek sidik jari **tanpa isi nama**:
-  Agent ambil semua template dari backend (`GET /api/fingerprints`), lalu
-  `Match()` satu-satu, kembalikan yang skornya tertinggi. `POST /verify`
-  (by nama, 1:1) tetap ada di kode untuk kebutuhan nanti kalau CBS asli mau
-  pakai pola 1:1 sesuai proses bisnis yang sudah dikonfirmasi di `design.md`.
+  **ARB+** (CBS), lewat progId **`MADC0005`** (kodenya ada di codebase ARB+
+  sendiri, di luar project ini — bukan bagian dari Agent). Agent login ke
+  ARB+ pakai akun sistem (`ARB_USERNAME`/`ARB_PASSWORD` di `.env`, lihat
+  `ArbAuthService.cs`) — bukan akun user asli — lalu manggil progId itu pakai
+  token hasil login. `ARB_URL` sekarang isinya **host ARB+**, bukan sekadar
+  backend generik. **ARB+ harus bisa diakses & akun sistemnya sudah
+  disiapkan** sebelum dipakai, kalau tidak `/verify` akan gagal.
+- **Field `key`, bukan `nama`** — `POST /enroll/start` dan `POST /verify`
+  menerima body `{"key": "..."}`, identifier generik yang nilainya terserah
+  pemanggil (CBS). Dari sisi ARB+, nilai yang dikirim adalah **`cf_mast_id`**
+  nasabah (lihat `CFMA0031.js`), bukan nama asli — Agent sendiri tidak tahu
+  dan tidak perlu tahu itu `cf_mast_id`, cuma meneruskannya sebagai parameter
+  `cf_mast_id` saat manggil progId `MADC0005` (`methods=get_template`).
+- **1:1 saja, tidak ada 1:N** — proses bisnis yang dikonfirmasi di
+  `design.md` §5.1 memang cuma 1:1 (identifier nasabah sudah diketahui dari
+  alur teller). Endpoint `POST /identify` (cek sidik jari tanpa tahu
+  identifier dulu) sempat ada sebagai testing convenience tapi **sudah
+  dihapus** karena progId MADC0005 yang sebenarnya memang tidak punya
+  dukungan ambil-semua-template.
 - Enrollment butuh **scan jari yang sama 3x** — ini persyaratan SDK
   (`DBMerge`), bukan bug.
 - **"Gagal menggabungkan hasil scan" / `DBMerge` kode `-22` (`ZKFP_ERR_MERGE`)**
@@ -200,19 +201,21 @@ agent/
 ├── README.md                     (file ini)
 ├── install-autostart.ps1          (sekali klik: auto-start Agent tiap login Windows)
 ├── .env.example                    (contoh isi .env — copy jadi .env kalau mau ubah manual)
-├── .env                            (dibuat otomatis saat run pertama, isinya ARB_URL — di-gitignore)
+├── .env                            (dibuat otomatis saat run pertama, isinya ARB_URL dkk — di-gitignore)
+├── .arb-session                    (dibuat otomatis pas login ARB+, dihapus pas logout normal — di-gitignore)
 ├── driver/setup.exe               (installer driver reader ZKTeco)
 ├── docs/ZKFinger Reader SDK C#_en_V2.pdf   (referensi resmi API SDK)
 └── FingerprintAgent/
     ├── FingerprintAgent.csproj
     ├── icon.ico                   (icon fingerprint — dipakai .exe & system tray)
     ├── Program.cs                 (entry point; dialog ARB_URL di awal; cari .env naik ke agent/)
-    ├── TrayApplicationContext.cs  (icon system tray + menu Keluar)
+    ├── TrayApplicationContext.cs  (icon system tray + menu Keluar, logout ARB+ pas keluar)
     ├── Logger.cs                  (tulis log ke agent.log, pengganti Console)
     ├── ZkFingerService.cs         (wrapper SDK: Init/Capture/Merge/Match)
     ├── EnrollSession.cs           (state machine 3x-scan + polling progres)
-    ├── TemplateStore.cs           (BackendTemplateStore: ambil template dari backend, lihat catatan di atas)
-    ├── HttpApi.cs                 (routing HTTP: /enroll/start, /enroll/status, /verify, /identify)
+    ├── ArbAuthService.cs          (login/logout akun sistem ke ARB+, cache token)
+    ├── TemplateStore.cs           (BackendTemplateStore: manggil progId MADC0005 di ARB+, lihat catatan di atas)
+    ├── HttpApi.cs                 (routing HTTP: /enroll/start, /enroll/status, /verify)
     ├── MiniJson.cs                (helper JSON minimal, sengaja tanpa NuGet)
     ├── EnvFile.cs                 (baca file .env sederhana, format KEY=VALUE)
     └── lib/

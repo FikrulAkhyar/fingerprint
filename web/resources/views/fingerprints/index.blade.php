@@ -12,12 +12,6 @@
       <input type="text" id="nama" placeholder="contoh: Budi Santoso">
       <button class="full" id="btnEnroll">Mulai Enroll</button>
     </div>
-
-    <div class="card">
-      <h2>Cek Sidik Jari</h2>
-      <p class="sub" style="margin-bottom: 14px;">Tempel jari langsung, sistem yang mencari cocok dengan siapa di database — tidak perlu isi nama.</p>
-      <button class="full" id="btnIdentify">Scan & Cek</button>
-    </div>
   </div>
 
   <div class="card">
@@ -78,7 +72,7 @@ btnEnroll.addEventListener('click', async () => {
     const startRes = await fetch(AGENT_URL + '/enroll/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nama }),
+      body: JSON.stringify({ key: nama }),
     });
     const startData = await startRes.json();
     if (!startRes.ok) throw new Error(startData.error || 'Gagal memulai enroll');
@@ -140,30 +134,6 @@ function pollEnrollStatus(sessionId) {
     }, 500);
   });
 }
-
-// --- Cek Sidik Jari (identifikasi 1:N, tanpa isi nama) ---
-const btnIdentify = document.getElementById('btnIdentify');
-
-btnIdentify.addEventListener('click', async () => {
-  btnIdentify.disabled = true;
-  ScanModal.open('Cek Sidik Jari', 1);
-
-  try {
-    const res = await fetch(AGENT_URL + '/identify', { method: 'POST' });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Gagal mengecek sidik jari');
-
-    if (data.match) {
-      ScanModal.success('Cocok dengan "' + data.nama + '". Skor: ' + data.score);
-    } else {
-      ScanModal.error('Sidik jari tidak dikenali. Skor: ' + data.score, 'Coba Lagi');
-    }
-  } catch (err) {
-    ScanModal.error(err.message, 'Coba Lagi');
-  } finally {
-    btnIdentify.disabled = false;
-  }
-});
 
 // --- Hapus data terdaftar ---
 document.querySelectorAll('.btn-delete').forEach((btn) => {

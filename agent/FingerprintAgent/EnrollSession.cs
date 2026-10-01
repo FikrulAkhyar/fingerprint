@@ -10,7 +10,7 @@ namespace FingerprintAgent
     public class EnrollSession
     {
         public string Id { get; } = Guid.NewGuid().ToString("N");
-        public string Nama { get; set; }
+        public string Key { get; set; }
         public int Step { get; set; }
         public bool Done { get; set; }
         public bool Success { get; set; }
@@ -32,9 +32,9 @@ namespace FingerprintAgent
             _zk = zk;
         }
 
-        public EnrollSession Start(string nama)
+        public EnrollSession Start(string key)
         {
-            var session = new EnrollSession { Nama = nama };
+            var session = new EnrollSession { Key = key };
             _sessions[session.Id] = session;
             Task.Run(() => Run(session));
             return session;
@@ -84,8 +84,8 @@ namespace FingerprintAgent
                 }
 
                 // Template dikembalikan ke browser saja — browser yang POST
-                // ke Laravel (lihat resources/views/fingerprints/enroll.blade.php
-                // di web/). Agent tidak menyimpan apa pun secara permanen.
+                // ke progId CFMA0031 (method save_fingerprint) di ARB+.
+                // Agent tidak menyimpan apa pun secara permanen.
                 session.TemplateBase64 = Convert.ToBase64String(finalTemplate);
                 session.Success = true;
                 session.Done = true;

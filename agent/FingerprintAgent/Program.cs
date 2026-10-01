@@ -59,7 +59,16 @@ namespace FingerprintAgent
 
             Logger.Info("Device siap.");
 
-            var store = new BackendTemplateStore(arbUrl);
+            // Akun sistem buat login ke ARB+ (progId MADC0005) — bukan akun
+            // user asli, konvensinya sama seperti ARB_SYSTEM_USERNAME/PASSWORD
+            // di sistem lain: 1 kredensial yang disiapkan khusus buat Agent,
+            // sama di semua laptop yang pakai ARB+ host yang sama.
+            env.TryGetValue("ARB_USERNAME", out var arbUsername);
+            env.TryGetValue("ARB_PASSWORD", out var arbPassword);
+            string sessionFilePath = Path.Combine(Path.GetDirectoryName(envPath) ?? ".", ".arb-session");
+            var auth = new ArbAuthService(arbUrl, arbUsername, arbPassword, sessionFilePath);
+
+            var store = new BackendTemplateStore(arbUrl, auth);
             var enrollManager = new EnrollSessionManager(zk);
 
             // Bind ke 127.0.0.1 saja — browser yang memicu scan selalu di
@@ -103,7 +112,7 @@ namespace FingerprintAgent
 
             Logger.Info("Agent siap di " + prefix);
 
-            using (var trayContext = new TrayApplicationContext(zk, prefix, envPath, store, arbUrl))
+            using (var trayContext = new TrayApplicationContext(zk, prefix, envPath, store, arbUrl, auth))
             {
                 Application.Run(trayContext);
             }
@@ -132,11 +141,13 @@ namespace FingerprintAgent
 
             // ARB_URL sengaja dibuat kosong (bukan diisi DefaultArbUrl) supaya
             // Main() tahu ini instalasi baru dan perlu munculkan dialog
-            // pengisian. AGENT_PORT dikomentari sebagai contoh saja — kalau
-            // tidak diisi, dipakai DefaultAgentPort.
+            // pengisian. ARB_USERNAME/PASSWORD & AGENT_PORT dikomentari
+            // sebagai contoh saja, diisi manual oleh yang setup.
             string newPath = Path.Combine(agentDir, ".env");
             File.WriteAllText(newPath,
                 "ARB_URL=" + Environment.NewLine +
+                "# ARB_USERNAME=" + Environment.NewLine +
+                "# ARB_PASSWORD=" + Environment.NewLine +
                 "# AGENT_PORT=" + DefaultAgentPort + " (ganti kalau port ini bentrok, lihat README)" + Environment.NewLine);
             return newPath;
         }
