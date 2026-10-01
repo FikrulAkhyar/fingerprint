@@ -9,6 +9,7 @@ namespace FingerprintAgent
     static class Program
     {
         private const string DefaultArbUrl = "http://127.0.0.1:8000";
+        private const string DefaultAgentPort = "9001";
 
         [STAThread]
         static void Main()
@@ -66,7 +67,10 @@ namespace FingerprintAgent
             // bukan di server CBS, jadi localhost selalu cukup apa pun
             // hosting CBS-nya). Tidak perlu diakses dari jaringan luar sama
             // sekali di produksi; lihat design.md §7 kenapa ini defaultnya.
-            const string prefix = "http://127.0.0.1:9001/";
+            string port = env.TryGetValue("AGENT_PORT", out var p) && !string.IsNullOrWhiteSpace(p)
+                ? p.Trim()
+                : DefaultAgentPort;
+            string prefix = "http://127.0.0.1:" + port + "/";
             var api = new HttpApi(prefix, zk, enrollManager, store);
 
             var httpThread = new Thread(() =>
@@ -79,7 +83,16 @@ namespace FingerprintAgent
                 {
                     Logger.Error("HTTP API berhenti: " + ex.Message);
                     MessageBox.Show(
-                        "Agent gagal membuka port 9001:\n\n" + ex.Message,
+                        "Agent gagal membuka port " + port + ":\n\n" + ex.Message +
+                        "\n\nKalau pesannya \"Access is denied\": Windows butuh izin eksplisit untuk " +
+                        "bind ke alamat ini walau cuma localhost. Jalankan SEKALI di Command Prompt " +
+                        "sebagai Administrator (ini TIDAK membuka akses ke jaringan luar, cuma izin " +
+                        "internal Windows):\n\n" +
+                        "netsh http add urlacl url=http://127.0.0.1:" + port + "/ user=Everyone\n\n" +
+                        "Lalu jalankan ulang Agent. Kalau masih gagal, cek juga apa port-nya sudah " +
+                        "dipakai proses lain (netstat -ano | findstr :" + port + ") atau masuk " +
+                        "excluded port range (netsh int ipv4 show excludedportrange protocol=tcp) " +
+                        "— kalau begitu, ganti AGENT_PORT di agent/.env ke angka lain.",
                         "Fingerprint Agent - Error",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Error);
@@ -117,10 +130,14 @@ namespace FingerprintAgent
                 .Parent?.Parent?.Parent?.Parent?.FullName
                 ?? AppDomain.CurrentDomain.BaseDirectory;
 
-            // Sengaja dibuat kosong (bukan diisi DefaultArbUrl) supaya Main()
-            // tahu ini instalasi baru dan perlu munculkan dialog pengisian.
+            // ARB_URL sengaja dibuat kosong (bukan diisi DefaultArbUrl) supaya
+            // Main() tahu ini instalasi baru dan perlu munculkan dialog
+            // pengisian. AGENT_PORT dikomentari sebagai contoh saja — kalau
+            // tidak diisi, dipakai DefaultAgentPort.
             string newPath = Path.Combine(agentDir, ".env");
-            File.WriteAllText(newPath, "ARB_URL=" + Environment.NewLine);
+            File.WriteAllText(newPath,
+                "ARB_URL=" + Environment.NewLine +
+                "# AGENT_PORT=" + DefaultAgentPort + " (ganti kalau port ini bentrok, lihat README)" + Environment.NewLine);
             return newPath;
         }
     }

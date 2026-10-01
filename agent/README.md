@@ -25,6 +25,10 @@ ini sengaja dan memang cukup: JS di halaman CBS jalan di browser teller
 selalu bisa diakses apa pun bentuk hosting CBS-nya. Tidak ada rencana
 expose Agent ke jaringan luar sama sekali — lihat `design.md` §7.
 
+Di beberapa Windows (tergantung konfigurasi/kebijakan sistemnya), bind ke
+`127.0.0.1` saja pun tetap butuh izin eksplisit dari Windows — lihat langkah
+4 di bawah.
+
 ## Yang perlu disiapkan di laptop Windows (sekali saja)
 
 1. Pastikan sudah pernah jalankan `driver/setup.exe` (di folder ini) untuk
@@ -41,6 +45,17 @@ expose Agent ke jaringan luar sama sekali — lihat `design.md` §7.
    build (karena project ini target `net48`, sama seperti Demo2 yang sudah
    terbukti jalan di Tahap 1) — ikuti link yang diberikan error tersebut untuk
    install "Microsoft .NET Framework 4.8 Targeting Pack" (installer kecil).
+4. Buka Command Prompt / PowerShell **as Administrator**, jalankan sekali:
+   ```
+   netsh http add urlacl url=http://127.0.0.1:9001/ user=Everyone
+   ```
+   Ini **bukan** membuka akses jaringan (beda dari `http://+:9001/` yang
+   berarti semua interface) — ini murni izin internal Windows supaya proses
+   biasa (bukan Administrator) boleh bind ke alamat localhost ini. Tanpa
+   langkah ini, di sebagian konfigurasi Windows, Agent gagal start dengan
+   error **"Access is denied"** walau sudah bind ke `127.0.0.1` saja.
+   Kalau nanti `AGENT_PORT` diganti dari default `9001` (lihat "Yang perlu
+   diketahui" di bawah), ulangi perintah ini dengan port yang baru.
 
 ## Setup awal (sekali saja, dilakukan yang develop/IT)
 
@@ -145,6 +160,26 @@ icon-nya tidak ada, double-click `FingerprintAgent.exe` di
   terpasang, atau masih dipakai aplikasi lain seperti Demo2 dari Tahap 1),
   akan muncul **popup error** saat Agent dijalankan (bukan tersembunyi) —
   pesannya menjelaskan apa yang salah.
+- **"Agent gagal membuka port 9001: Access is denied"** — tray icon tetap
+  muncul (karena itu bagian lain dari kode), tapi API-nya tidak aktif
+  (browser tidak bisa connect). Urutan troubleshoot:
+  1. **Paling umum**: belum jalankan izin `netsh` di langkah 4 "Yang perlu
+     disiapkan" di atas. Jalankan itu dulu (as Administrator), lalu coba lagi.
+  2. Kalau sudah dilakukan tapi masih gagal, cek apa port-nya bentrok dengan
+     proses lain atau masuk *excluded port range* Windows (sering kejadian
+     kalau Hyper-V/WSL2/Docker Desktop aktif):
+     ```
+     netsh int ipv4 show excludedportrange protocol=tcp
+     netstat -ano | findstr :9001
+     ```
+     Kalau `9001` muncul di salah satunya, ganti port lewat `agent/.env`:
+     ```
+     AGENT_PORT=9101
+     ```
+     (angka bebas), ulangi perintah `netsh urlacl` dengan port baru itu, lalu
+     jalankan ulang Agent — tidak perlu build ulang. Jangan lupa sesuaikan
+     juga alamat yang dipakai browser untuk memanggil Agent supaya cocok
+     dengan port baru.
 - Semua log (start, error, aktivitas) ditulis ke `agent.log` di folder yang
   sama dengan `.exe`-nya — cek file ini kalau perlu troubleshoot lebih detail
   (karena tidak ada console yang menampilkan log secara langsung).
