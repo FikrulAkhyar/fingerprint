@@ -116,7 +116,7 @@ namespace FingerprintAgent
 
             Logger.Info("Agent siap di " + prefix);
 
-            using (var trayContext = new TrayApplicationContext(zk, prefix, envPath, store, arbUrl, auth))
+            using (var trayContext = new TrayApplicationContext(zk, prefix, envPath, store, arbUrl, arbUsername, auth))
             {
                 Application.Run(trayContext);
             }

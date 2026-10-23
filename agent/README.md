@@ -85,7 +85,11 @@ laptop client **tidak perlu command apa pun** (termasuk tidak perlu
    `install-autostart.ps1` > **Run with PowerShell** (sekali saja).
 6. Pastikan backend-nya (lihat `ARB_URL`, bagian "Yang perlu diketahui" di
    bawah) sudah jalan sebelum dipakai — tanpa itu `/enroll` dan `/verify`
-   tidak bisa menyimpan/mengambil template.
+   tidak bisa menyimpan/mengambil template. Isi juga `ARB_USERNAME` &
+   `ARB_PASSWORD` (akun sistem buat login ke ARB+) — boleh edit `.env`
+   manual, atau lebih gampang lewat menu **"Ubah ARB_USERNAME..."** /
+   **"Ubah ARB_PASSWORD..."** di system tray setelah Agent pertama kali
+   jalan (lihat "Yang perlu diketahui" di bawah).
 
 Update berikutnya (kalau ada perubahan kode Agent) tinggal ulangi langkah 1
 di laptop build, lalu copy ulang folder `agent/` (minimal isi
@@ -128,11 +132,15 @@ icon-nya tidak ada, double-click `FingerprintAgent.exe` di
 
 ## Yang perlu diketahui
 
-- **Cek status & ubah ARB_URL dari tray**: klik kanan icon di system tray —
-  ada baris info (tidak bisa diklik) nunjukkin alamat Agent sendiri
-  (`Listen: ...`) dan alamat backend yang lagi dipakai (`ARB_URL: ...`), plus
-  menu **"Ubah ARB_URL..."** buat ganti alamat backend kapan saja tanpa
-  restart Agent (langsung berlaku & otomatis tersimpan ke `.env`).
+- **Cek status & ubah konfigurasi ARB+ dari tray**: klik kanan icon di system
+  tray — ada baris info (tidak bisa diklik) nunjukkin alamat Agent sendiri
+  (`Listen: ...`), alamat backend (`ARB_URL: ...`), dan username akun sistem
+  (`ARB_USERNAME: ...`) yang lagi dipakai (password sengaja tidak
+  ditampilkan). Menu **"Ubah ARB_URL..."**, **"Ubah ARB_USERNAME..."**, dan
+  **"Ubah ARB_PASSWORD..."** bisa dipakai kapan saja tanpa restart Agent —
+  langsung berlaku (termasuk langsung logout dari akun ARB+ lama & login
+  ulang pakai kredensial baru di panggilan berikutnya) & otomatis tersimpan
+  ke `.env`.
 - **Migrasi dari versi lama**: kalau `agent/.env` di laptop Anda masih punya
   `BACKEND_URL=...` dan/atau `AGENT_BIND_HOST=...` dari setup sebelumnya,
   itu **tidak terbaca lagi** — ganti nama key `BACKEND_URL` jadi `ARB_URL`,

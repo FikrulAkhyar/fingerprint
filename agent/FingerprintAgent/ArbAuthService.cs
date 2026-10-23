@@ -23,8 +23,8 @@ namespace FingerprintAgent
     public class ArbAuthService
     {
         private readonly string _baseUrl;
-        private readonly string _username;
-        private readonly string _password;
+        private string _username;
+        private string _password;
         private readonly string _sessionFilePath;
         private readonly object _lock = new object();
         private string _token;
@@ -57,8 +57,7 @@ namespace FingerprintAgent
         {
             lock (_lock)
             {
-                if (_token != null)
-                    TryLogout(_token);
+                InvalidateToken();
                 _token = Login();
                 return _token;
             }
@@ -68,11 +67,38 @@ namespace FingerprintAgent
         {
             lock (_lock)
             {
-                if (_token != null)
-                    TryLogout(_token);
-                _token = null;
-                ClearSessionFile();
+                InvalidateToken();
             }
+        }
+
+        // Dipanggil dari tray (TrayApplicationContext) pas user ganti
+        // ARB_USERNAME/ARB_PASSWORD — token lama (dari akun lama) dibuang
+        // supaya panggilan progId berikutnya login ulang pakai kredensial
+        // baru, bukan nyangkut pakai token akun lama.
+        public void UpdateUsername(string username)
+        {
+            lock (_lock)
+            {
+                _username = username;
+                InvalidateToken();
+            }
+        }
+
+        public void UpdatePassword(string password)
+        {
+            lock (_lock)
+            {
+                _password = password;
+                InvalidateToken();
+            }
+        }
+
+        private void InvalidateToken()
+        {
+            if (_token != null)
+                TryLogout(_token);
+            _token = null;
+            ClearSessionFile();
         }
 
         private string Login()
