@@ -79,8 +79,14 @@ namespace FingerprintAgent
             string port = env.TryGetValue("AGENT_PORT", out var p) && !string.IsNullOrWhiteSpace(p)
                 ? p.Trim()
                 : DefaultAgentPort;
+            if (!int.TryParse(port, out int portNumber))
+            {
+                Logger.Error("AGENT_PORT tidak valid (\"" + port + "\"), pakai default " + DefaultAgentPort);
+                port = DefaultAgentPort;
+                portNumber = int.Parse(DefaultAgentPort);
+            }
             string prefix = "http://127.0.0.1:" + port + "/";
-            var api = new HttpApi(prefix, zk, enrollManager, store);
+            var api = new HttpApi(portNumber, zk, enrollManager, store);
 
             var httpThread = new Thread(() =>
             {
@@ -93,15 +99,13 @@ namespace FingerprintAgent
                     Logger.Error("HTTP API berhenti: " + ex.Message);
                     MessageBox.Show(
                         "Agent gagal membuka port " + port + ":\n\n" + ex.Message +
-                        "\n\nKalau pesannya \"Access is denied\": Windows butuh izin eksplisit untuk " +
-                        "bind ke alamat ini walau cuma localhost. Jalankan SEKALI di Command Prompt " +
-                        "sebagai Administrator (ini TIDAK membuka akses ke jaringan luar, cuma izin " +
-                        "internal Windows):\n\n" +
-                        "netsh http add urlacl url=http://127.0.0.1:" + port + "/ user=Everyone\n\n" +
-                        "Lalu jalankan ulang Agent. Kalau masih gagal, cek juga apa port-nya sudah " +
-                        "dipakai proses lain (netstat -ano | findstr :" + port + ") atau masuk " +
-                        "excluded port range (netsh int ipv4 show excludedportrange protocol=tcp) " +
-                        "— kalau begitu, ganti AGENT_PORT di agent/.env ke angka lain.",
+                        "\n\nKemungkinan penyebab: port ini sudah dipakai proses lain, atau masuk " +
+                        "excluded port range Windows (sering kejadian kalau Hyper-V/WSL2/Docker " +
+                        "Desktop aktif). Cek dengan:\n\n" +
+                        "netstat -ano | findstr :" + port + "\n" +
+                        "netsh int ipv4 show excludedportrange protocol=tcp\n\n" +
+                        "Kalau port-nya bentrok, ganti AGENT_PORT di agent/.env ke angka lain lalu " +
+                        "jalankan ulang Agent.",
                         "Fingerprint Agent - Error",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Error);

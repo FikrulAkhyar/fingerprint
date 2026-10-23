@@ -25,59 +25,72 @@ ini sengaja dan memang cukup: JS di halaman CBS jalan di browser teller
 selalu bisa diakses apa pun bentuk hosting CBS-nya. Tidak ada rencana
 expose Agent ke jaringan luar sama sekali — lihat `design.md` §7.
 
-Di beberapa Windows (tergantung konfigurasi/kebijakan sistemnya), bind ke
-`127.0.0.1` saja pun tetap butuh izin eksplisit dari Windows — lihat langkah
-4 di bawah.
+HTTP API-nya dibangun di atas `TcpListener` mentah + parser manual
+(`MiniHttp.cs`), **bukan** `System.Net.HttpListener` — sengaja, supaya tidak
+ada ketergantungan ke `http.sys`/reservasi ACL Windows sama sekali. Jadi
+laptop client **tidak perlu command apa pun** (termasuk tidak perlu
+`netsh`/Administrator) sebelum Agent bisa bind ke port-nya.
 
-## Yang perlu disiapkan di laptop Windows (sekali saja)
+**Ada dua peran laptop di sini, jangan tertukar:**
+- **Laptop build** — satu laptop (boleh laptop IT/develop mana saja, tidak
+  harus salah satu laptop teller) yang punya **.NET SDK**, dipakai buat
+  compile sekali. Tidak perlu device ZKTeco tercolok di laptop ini.
+- **Laptop client** — laptop teller yang sebenarnya dipakai sehari-hari,
+  tempat device ZKTeco dicolok. Laptop ini **tidak perlu .NET SDK atau
+  compile apa pun** — cukup terima hasil build yang sudah jadi lalu
+  dijalankan langsung.
 
-1. Pastikan sudah pernah jalankan `driver/setup.exe` (di folder ini) untuk
-   pasang driver reader — ini sudah dilakukan di Tahap 1. Kalau pindah ke
-   laptop lain yang baru, jalankan lagi dari sini.
-2. Install **.NET SDK** (bukan Visual Studio, cukup SDK-nya saja, ~200MB).
+## 1. Build sekali (di laptop build)
+
+1. Install **.NET SDK** (bukan Visual Studio, cukup SDK-nya saja, ~200MB).
    Paling gampang lewat command line (PowerShell):
    ```
    winget install Microsoft.DotNet.SDK.8
    ```
    Atau download installer dari halaman resmi .NET di situs Microsoft
    (dotnet.microsoft.com) kalau `winget` tidak tersedia.
-3. Kalau nanti muncul error soal "targeting pack .NET Framework 4.8" saat
+2. Kalau nanti muncul error soal "targeting pack .NET Framework 4.8" saat
    build (karena project ini target `net48`, sama seperti Demo2 yang sudah
    terbukti jalan di Tahap 1) — ikuti link yang diberikan error tersebut untuk
    install "Microsoft .NET Framework 4.8 Targeting Pack" (installer kecil).
-4. Buka Command Prompt / PowerShell **as Administrator**, jalankan sekali:
-   ```
-   netsh http add urlacl url=http://127.0.0.1:9001/ user=Everyone
-   ```
-   Ini **bukan** membuka akses jaringan (beda dari `http://+:9001/` yang
-   berarti semua interface) — ini murni izin internal Windows supaya proses
-   biasa (bukan Administrator) boleh bind ke alamat localhost ini. Tanpa
-   langkah ini, di sebagian konfigurasi Windows, Agent gagal start dengan
-   error **"Access is denied"** walau sudah bind ke `127.0.0.1` saja.
-   Kalau nanti `AGENT_PORT` diganti dari default `9001` (lihat "Yang perlu
-   diketahui" di bawah), ulangi perintah ini dengan port yang baru.
-
-## Setup awal (sekali saja, dilakukan yang develop/IT)
-
-1. Copy folder `fingerprint/agent` ini via USB ke laptop Windows.
-2. Colok alat ZKTeco Live20R.
+   Ini juga cuma dibutuhkan di laptop build, bukan di laptop client.
 3. Buka Command Prompt / PowerShell, masuk ke folder, lalu build (Release,
-   bukan `dotnet run`, supaya hasil `.exe`-nya bisa dipakai berulang tanpa
-   command line lagi):
+   bukan `dotnet run`, supaya hasilnya berupa `.exe` yang bisa dipakai
+   berulang tanpa command line lagi):
    ```
    cd FingerprintAgent
    dotnet build -c Release
    ```
-4. Hasil `.exe`-nya ada di `FingerprintAgent\bin\Release\net48\FingerprintAgent.exe`
-   — double-click file ini untuk jalanin Agent. **Tidak ada jendela yang
-   muncul**; cek icon baru di system tray (pojok kanan bawah) bertuliskan
-   "Fingerprint Agent — Aktif". Klik kanan icon itu untuk keluar/matikan.
+4. Hasil build-nya ada di `FingerprintAgent\bin\Release\net48\` — **folder
+   inilah** (isinya `FingerprintAgent.exe`, DLL SDK, `icon.ico`, dst.) yang
+   nanti di-copy ke tiap laptop client.
+
+## 2. Setup di tiap laptop client (tidak perlu install apa pun lagi)
+
+1. Copy **seluruh folder `agent/`** (sudah termasuk hasil build dari langkah
+   1 di atas, lengkap dengan `driver/setup.exe`) via USB/jaringan ke laptop
+   client — taruh di mana saja, mis. `C:\FingerprintAgent\`.
+2. Jalankan `driver/setup.exe` untuk pasang driver reader ZKTeco — ini
+   **satu-satunya instalasi** yang memang wajib di laptop client, karena
+   device fisiknya butuh driver. Kalau pindah ke laptop lain yang baru,
+   jalankan lagi dari sini.
+3. Colok alat ZKTeco Live20R.
+4. Double-click `FingerprintAgent\bin\Release\net48\FingerprintAgent.exe` —
+   **tidak ada jendela yang muncul**; cek icon baru di system tray (pojok
+   kanan bawah) bertuliskan "Fingerprint Agent — Aktif". Pertama kali jalan
+   akan muncul dialog isi `ARB_URL` (lihat catatan di atas) — isi sekali,
+   tidak akan ditanya lagi. Klik kanan icon tray untuk keluar/matikan.
 5. (Opsional, disarankan) supaya Agent otomatis nyala tiap kali Windows
    login — tidak perlu double-click manual tiap hari — klik kanan
    `install-autostart.ps1` > **Run with PowerShell** (sekali saja).
 6. Pastikan backend-nya (lihat `ARB_URL`, bagian "Yang perlu diketahui" di
    bawah) sudah jalan sebelum dipakai — tanpa itu `/enroll` dan `/verify`
    tidak bisa menyimpan/mengambil template.
+
+Update berikutnya (kalau ada perubahan kode Agent) tinggal ulangi langkah 1
+di laptop build, lalu copy ulang folder `agent/` (minimal isi
+`FingerprintAgent\bin\Release\net48\`) ke tiap laptop client — tidak ada
+yang perlu di-install ulang di sana.
 
 ## Menjalankan Agent, backend, & browser di laptop berbeda (1 jaringan WiFi)
 
@@ -161,26 +174,22 @@ icon-nya tidak ada, double-click `FingerprintAgent.exe` di
   terpasang, atau masih dipakai aplikasi lain seperti Demo2 dari Tahap 1),
   akan muncul **popup error** saat Agent dijalankan (bukan tersembunyi) —
   pesannya menjelaskan apa yang salah.
-- **"Agent gagal membuka port 9001: Access is denied"** — tray icon tetap
-  muncul (karena itu bagian lain dari kode), tapi API-nya tidak aktif
-  (browser tidak bisa connect). Urutan troubleshoot:
-  1. **Paling umum**: belum jalankan izin `netsh` di langkah 4 "Yang perlu
-     disiapkan" di atas. Jalankan itu dulu (as Administrator), lalu coba lagi.
-  2. Kalau sudah dilakukan tapi masih gagal, cek apa port-nya bentrok dengan
-     proses lain atau masuk *excluded port range* Windows (sering kejadian
-     kalau Hyper-V/WSL2/Docker Desktop aktif):
-     ```
-     netsh int ipv4 show excludedportrange protocol=tcp
-     netstat -ano | findstr :9001
-     ```
-     Kalau `9001` muncul di salah satunya, ganti port lewat `agent/.env`:
-     ```
-     AGENT_PORT=9101
-     ```
-     (angka bebas), ulangi perintah `netsh urlacl` dengan port baru itu, lalu
-     jalankan ulang Agent — tidak perlu build ulang. Jangan lupa sesuaikan
-     juga alamat yang dipakai browser untuk memanggil Agent supaya cocok
-     dengan port baru.
+- **"Agent gagal membuka port 9001"** — tray icon tetap muncul (karena itu
+  bagian lain dari kode), tapi API-nya tidak aktif (browser tidak bisa
+  connect). Penyebab paling umum: port-nya bentrok dengan proses lain, atau
+  masuk *excluded port range* Windows (sering kejadian kalau
+  Hyper-V/WSL2/Docker Desktop aktif). Cek dengan:
+  ```
+  netsh int ipv4 show excludedportrange protocol=tcp
+  netstat -ano | findstr :9001
+  ```
+  Kalau `9001` muncul di salah satunya, ganti port lewat `agent/.env`:
+  ```
+  AGENT_PORT=9101
+  ```
+  (angka bebas), lalu jalankan ulang Agent — tidak perlu build ulang dan
+  tidak perlu command admin apa pun. Jangan lupa sesuaikan juga alamat yang
+  dipakai browser untuk memanggil Agent supaya cocok dengan port baru.
 - Semua log (start, error, aktivitas) ditulis ke `agent.log` di folder yang
   sama dengan `.exe`-nya — cek file ini kalau perlu troubleshoot lebih detail
   (karena tidak ada console yang menampilkan log secara langsung).
@@ -216,6 +225,7 @@ agent/
     ├── ArbAuthService.cs          (login/logout akun sistem ke ARB+, cache token)
     ├── TemplateStore.cs           (BackendTemplateStore: manggil progId MADC0005 di ARB+, lihat catatan di atas)
     ├── HttpApi.cs                 (routing HTTP: /enroll/start, /enroll/status, /verify)
+    ├── MiniHttp.cs                (TcpListener + parser HTTP manual, sengaja bukan HttpListener)
     ├── MiniJson.cs                (helper JSON minimal, sengaja tanpa NuGet)
     ├── EnvFile.cs                 (baca file .env sederhana, format KEY=VALUE)
     └── lib/

@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using System.Net;
-using System.Text;
+using System.Net.Sockets;
 using System.Threading;
 
 namespace FingerprintAgent
@@ -10,16 +10,20 @@ namespace FingerprintAgent
     // /enroll/start, GET /enroll/status, POST /verify. Identifier nasabah
     // dikirim sebagai field generik "key" (di sisi ARB+ nilainya cf_mast_id),
     // supaya kontrak Agent tidak terikat istilah ARB+.
+    //
+    // Dibangun di atas TcpListener + parser manual (MiniHttp.cs), bukan
+    // System.Net.HttpListener — supaya laptop client tidak perlu izin
+    // `netsh http add urlacl` sama sekali buat bind ke 127.0.0.1.
     public class HttpApi
     {
-        private readonly HttpListener _listener = new HttpListener();
+        private readonly TcpListener _listener;
         private readonly ZkFingerService _zk;
         private readonly EnrollSessionManager _enrollManager;
         private readonly ITemplateStore _store;
 
-        public HttpApi(string prefix, ZkFingerService zk, EnrollSessionManager enrollManager, ITemplateStore store)
+        public HttpApi(int port, ZkFingerService zk, EnrollSessionManager enrollManager, ITemplateStore store)
         {
-            _listener.Prefixes.Add(prefix);
+            _listener = new TcpListener(IPAddress.Loopback, port);
             _zk = zk;
             _enrollManager = enrollManager;
             _store = store;
@@ -28,122 +32,108 @@ namespace FingerprintAgent
         public void Start()
         {
             _listener.Start();
-            while (_listener.IsListening)
+            while (true)
             {
-                var context = _listener.GetContext();
-                ThreadPool.QueueUserWorkItem(_ => Handle(context));
+                var client = _listener.AcceptTcpClient();
+                ThreadPool.QueueUserWorkItem(_ => Handle(client));
             }
         }
 
-        private void Handle(HttpListenerContext context)
+        private void Handle(TcpClient client)
         {
-            var req = context.Request;
-            var res = context.Response;
-            res.Headers.Add("Access-Control-Allow-Origin", "*");
-            res.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
-            res.Headers.Add("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-
-            try
+            using (client)
+            using (var stream = client.GetStream())
             {
-                if (req.HttpMethod == "OPTIONS")
+                stream.ReadTimeout = 10000;
+                stream.WriteTimeout = 10000;
+
+                try
                 {
-                    res.StatusCode = 204;
-                    res.Close();
-                    return;
-                }
+                    var req = MiniHttpRequest.Parse(stream);
+                    if (req == null) return; // koneksi kosong/putus di awal, abaikan
 
-                if (req.HttpMethod == "POST" && req.Url.AbsolutePath == "/enroll/start")
-                    HandleEnrollStart(req, res);
-                else if (req.HttpMethod == "GET" && req.Url.AbsolutePath == "/enroll/status")
-                    HandleEnrollStatus(req, res);
-                else if (req.HttpMethod == "POST" && req.Url.AbsolutePath == "/verify")
-                    HandleVerify(req, res);
-                else
-                    WriteJson(res, 404, MiniJson.WriteObject(("error", "Not found")));
-            }
-            catch (Exception ex)
-            {
-                WriteJson(res, 500, MiniJson.WriteObject(("error", ex.Message)));
+                    if (req.Method == "OPTIONS")
+                    {
+                        MiniHttpRequest.WriteResponse(stream, 204, null);
+                        return;
+                    }
+
+                    if (req.Method == "POST" && req.Path == "/enroll/start")
+                        HandleEnrollStart(req, stream);
+                    else if (req.Method == "GET" && req.Path == "/enroll/status")
+                        HandleEnrollStatus(req, stream);
+                    else if (req.Method == "POST" && req.Path == "/verify")
+                        HandleVerify(req, stream);
+                    else
+                        MiniHttpRequest.WriteResponse(stream, 404, MiniJson.WriteObject(("error", "Not found")));
+                }
+                catch (Exception ex)
+                {
+                    try { MiniHttpRequest.WriteResponse(stream, 500, MiniJson.WriteObject(("error", ex.Message))); }
+                    catch { /* koneksi sudah keburu putus, tidak ada yang bisa dilakukan */ }
+                }
             }
         }
 
-        private void HandleEnrollStart(HttpListenerRequest req, HttpListenerResponse res)
+        private void HandleEnrollStart(MiniHttpRequest req, Stream stream)
         {
-            string key = MiniJson.ExtractString(ReadBody(req), "key");
+            string key = MiniJson.ExtractString(req.Body, "key");
             if (string.IsNullOrEmpty(key))
             {
-                WriteJson(res, 422, MiniJson.WriteObject(("error", "key wajib diisi")));
+                MiniHttpRequest.WriteResponse(stream, 422, MiniJson.WriteObject(("error", "key wajib diisi")));
                 return;
             }
 
             var session = _enrollManager.Start(key);
-            WriteJson(res, 200, MiniJson.WriteObject(("session_id", session.Id)));
+            MiniHttpRequest.WriteResponse(stream, 200, MiniJson.WriteObject(("session_id", session.Id)));
         }
 
-        private void HandleEnrollStatus(HttpListenerRequest req, HttpListenerResponse res)
+        private void HandleEnrollStatus(MiniHttpRequest req, Stream stream)
         {
-            string sessionId = req.QueryString["session_id"];
+            req.Query.TryGetValue("session_id", out var sessionId);
             var session = _enrollManager.Get(sessionId);
             if (session == null)
             {
-                WriteJson(res, 404, MiniJson.WriteObject(("error", "Session tidak ditemukan")));
+                MiniHttpRequest.WriteResponse(stream, 404, MiniJson.WriteObject(("error", "Session tidak ditemukan")));
                 return;
             }
 
             if (!session.Done)
             {
-                WriteJson(res, 200, MiniJson.WriteObject(("step", session.Step), ("done", false)));
+                MiniHttpRequest.WriteResponse(stream, 200, MiniJson.WriteObject(("step", session.Step), ("done", false)));
                 return;
             }
 
-            WriteJson(res, 200, session.Success
+            MiniHttpRequest.WriteResponse(stream, 200, session.Success
                 ? MiniJson.WriteObject(("done", true), ("success", true), ("template", session.TemplateBase64), ("merge_fallback", session.UsedMergeFallback))
                 : MiniJson.WriteObject(("done", true), ("success", false), ("error", session.ErrorMessage)));
         }
 
-        private void HandleVerify(HttpListenerRequest req, HttpListenerResponse res)
+        private void HandleVerify(MiniHttpRequest req, Stream stream)
         {
-            string key = MiniJson.ExtractString(ReadBody(req), "key");
+            string key = MiniJson.ExtractString(req.Body, "key");
             if (string.IsNullOrEmpty(key))
             {
-                WriteJson(res, 422, MiniJson.WriteObject(("error", "key wajib diisi")));
+                MiniHttpRequest.WriteResponse(stream, 422, MiniJson.WriteObject(("error", "key wajib diisi")));
                 return;
             }
 
             byte[] stored = _store.Get(key);
             if (stored == null)
             {
-                WriteJson(res, 404, MiniJson.WriteObject(("error", "Belum ada sidik jari terdaftar untuk key ini")));
+                MiniHttpRequest.WriteResponse(stream, 404, MiniJson.WriteObject(("error", "Belum ada sidik jari terdaftar untuk key ini")));
                 return;
             }
 
             byte[] captured = _zk.CaptureOnce();
             if (captured == null)
             {
-                WriteJson(res, 408, MiniJson.WriteObject(("error", "Waktu habis, tidak ada jari terdeteksi")));
+                MiniHttpRequest.WriteResponse(stream, 408, MiniJson.WriteObject(("error", "Waktu habis, tidak ada jari terdeteksi")));
                 return;
             }
 
             int score = _zk.Match(captured, stored);
-            WriteJson(res, 200, MiniJson.WriteObject(("match", score > 0), ("score", score)));
-        }
-
-        private static string ReadBody(HttpListenerRequest req)
-        {
-            using (var reader = new StreamReader(req.InputStream, req.ContentEncoding ?? Encoding.UTF8))
-            {
-                return reader.ReadToEnd();
-            }
-        }
-
-        private static void WriteJson(HttpListenerResponse res, int statusCode, string json)
-        {
-            res.StatusCode = statusCode;
-            res.ContentType = "application/json";
-            byte[] bytes = Encoding.UTF8.GetBytes(json);
-            res.ContentLength64 = bytes.Length;
-            res.OutputStream.Write(bytes, 0, bytes.Length);
-            res.OutputStream.Close();
+            MiniHttpRequest.WriteResponse(stream, 200, MiniJson.WriteObject(("match", score > 0), ("score", score)));
         }
     }
 }
